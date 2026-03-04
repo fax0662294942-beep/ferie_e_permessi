@@ -1,9 +1,10 @@
 const CACHE_NAME = 'ferie-permessi-v11';
+const BASE = '/ferie_e_permessi';
 const ASSETS = [
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  BASE + '/index.html',
+  BASE + '/manifest.json',
+  BASE + '/icons/icon-192x192.png',
+  BASE + '/icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', e => {
