@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferie & Permessi</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232636;
+    --surface3: #2d3147;
+    --border: #2e3150;
+    --accent-f: #4ade80;
+    --accent-f2: #166534;
+    --accent-p: #60a5fa;
+    --accent-p2: #1d4ed8;
+    --accent-sim: #f59e0b;
+    --text: #e8eaf0;
+    --text2: #9aa0bc;
+    --text3: #5c6285;
+    --danger: #f87171;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 54px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .app-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .app-title span { color: var(--accent-f); }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; font-weight: 500; transition: background .2s;
+  }
+  .user-chip:hover { background: var(--surface3); }
+  .user-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent-f2); color: var(--accent-f);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 7px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; display: flex;
+    align-items: center; justify-content: center; transition: all .2s;
+    font-size: 14px;
+  }
+  .icon-btn:hover { background: var(--surface3); color: var(--text); }
+
+  /* ── NAV TABS ── */
+  .nav-tabs {
+    display: flex; gap: 4px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 8px 16px 0;
+  }
+  .nav-tab {
+    padding: 7px 14px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--text2); border: 1px solid transparent;
+    border-bottom: none; transition: all .2s;
+    background: transparent;
+  }
+  .nav-tab.active {
+    background: var(--bg); color: var(--text);
+    border-color: var(--border); margin-bottom: -1px;
+  }
+  .nav-tab.sim-tab.active { border-color: var(--accent-sim); color: var(--accent-sim); }
+  .nav-tab.cal-tab.active { border-color: var(--accent-p); color: var(--accent-p); }
+
+  /* ── STICKY TOP ── */
+  #stickyTop {
+    box-shadow: 0 4px 16px rgba(0,0,0,.35);
+  }
+
+  /* ── MONTH NAVIGATOR ── */
+  .month-nav {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+  }
+  .nav-arrow {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 16px; transition: all .2s; flex-shrink: 0;
+  }
+  .nav-arrow:hover { background: var(--surface3); color: var(--text); }
+  .month-label-wrap {
+    flex: 1; text-align: center; cursor: pointer;
+    padding: 0 12px;
+  }
+  .month-label-main { font-size: 18px; font-weight: 700; letter-spacing: -0.4px; }
+  .month-label-year { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .sim-badge {
+    display: inline-block;
+    background: var(--accent-sim); color: #000;
+    font-size: 9px; font-weight: 700; padding: 1px 6px;
+    border-radius: 8px; letter-spacing: 0.5px; margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* ── SUMMARY CARDS ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 12px 0;
+  }
+  .summary-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  .summary-section.ferie { border-top: 3px solid var(--accent-f); }
+  .summary-section.permessi { border-top: 3px solid var(--accent-p); }
+  .section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  .section-title.ferie { color: var(--accent-f); }
+  .section-title.permessi { color: var(--accent-p); }
+
+  .year-block { margin-bottom: 6px; }
+  .year-block-label {
+    font-size: 9px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+    padding-bottom: 3px; border-bottom: 1px solid var(--border);
+  }
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2px 0;
+  }
+  .stat-label { font-size: 11px; color: var(--text2); }
+  .stat-value { font-size: 12px; font-weight: 600; font-family: 'DM Mono', monospace; }
+  .stat-value.green { color: var(--accent-f); }
+  .stat-value.blue { color: var(--accent-p); }
+  .stat-value.red { color: var(--danger); }
+  .stat-value.white { color: var(--text); }
+  .year-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+  /* ── MESE CORRENTE BOX ── */
+  .month-info-bar {
+    margin: 10px 12px 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    display: flex; gap: 0; flex-wrap: wrap;
+  }
+  .month-mat-item {
+    flex: 1; min-width: 140px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .month-mat-label { font-size: 10px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .month-mat-value { font-size: 14px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .month-mat-value.f { color: var(--accent-f); }
+  .month-mat-value.p { color: var(--accent-p); }
+  .month-mat-divider { width: 1px; background: var(--border); margin: 0 14px; }
+
+  /* ── ACTION BUTTONS ── */
+  .action-row {
+    display: flex; gap: 10px; padding: 10px 12px;
+  }
+  .action-btn {
+    flex: 1; padding: 11px; border-radius: var(--radius);
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 600; transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .action-btn.ferie-btn {
+    background: var(--accent-f2); color: var(--accent-f);
+    border: 1px solid var(--accent-f);
+  }
+  .action-btn.ferie-btn:hover { background: var(--accent-f); color: #000; }
+  .action-btn.permesso-btn {
+    background: var(--accent-p2); color: var(--accent-p);
+    border: 1px solid var(--accent-p);
+  }
+  .action-btn.permesso-btn:hover { background: var(--accent-p); color: #000; }
+  .action-btn.sim-btn {
+    background: rgba(245,158,11,.12); color: var(--accent-sim);
+    border: 1px solid var(--accent-sim);
+  }
+  .action-btn.sim-btn:hover { background: var(--accent-sim); color: #000; }
+
+  /* ── ENTRY LIST ── */
+  .entries-container {
+    padding: 0 12px 100px;
+  }
+  .entries-section-label {
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    padding: 8px 0 6px;
+  }
+  .entry-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .entry-card:hover { border-color: var(--surface3); }
+  .entry-card.tipo-ferie { border-left: 3px solid var(--accent-f); }
+  .entry-card.tipo-permesso { border-left: 3px solid var(--accent-p); }
+  .entry-card.tipo-sim { border-left: 3px solid var(--accent-sim); }
+  .entry-inner {
+    display: flex; align-items: center;
+    padding: 12px 14px; gap: 12px;
+  }
+  .entry-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .entry-icon.f { background: rgba(74,222,128,.12); }
+  .entry-icon.p { background: rgba(96,165,250,.12); }
+  .entry-icon.s { background: rgba(245,158,11,.12); }
+  .entry-body { flex: 1; min-width: 0; }
+  .entry-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-sub { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: 'DM Mono', monospace; }
+  .entry-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .entry-qty { font-size: 15px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .entry-qty.f { color: var(--accent-f); }
+  .entry-qty.p { color: var(--accent-p); }
+  .entry-qty.s { color: var(--accent-sim); }
+  .entry-confirm {
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    color: var(--accent-sim); background: rgba(245,158,11,.12);
+    border: 1px solid rgba(245,158,11,.35); border-radius: 6px;
+    padding: 3px 8px; transition: all .15s; white-space: nowrap;
+  }
+  .entry-confirm:hover { background: var(--accent-sim); color: #000; }
+  .entry-del {
+    color: var(--text3); cursor: pointer; font-size: 13px;
+    padding: 2px 4px; transition: color .2s; border-radius: 4px;
+  }
+  .entry-del:hover { color: var(--danger); background: rgba(248,113,113,.1); }
+
+  .confirm-sim-row {
+    padding: 0 12px 10px;
+  }
+  .confirm-sim-btn {
+    width: 100%; padding: 9px;
+    background: rgba(245,158,11,.1);
+    border: 1px solid var(--accent-sim);
+    color: var(--accent-sim);
+    border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: all .2s;
+  }
+  .confirm-sim-btn:hover { background: var(--accent-sim); color: #000; }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px;
+    color: var(--text3); font-size: 14px;
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.4; }
+
+  /* ── MODALI ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.75);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 200; opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px;
+    width: 100%; max-width: 480px;
+    transform: translateY(24px);
+    transition: transform .25s;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .modal-title.f { color: var(--accent-f); }
+  .modal-title.p { color: var(--accent-p); }
+  .modal-title.s { color: var(--accent-sim); }
+
+  .form-group { margin-bottom: 13px; }
+  .form-label { font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 5px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input, .form-select {
+    width: 100%; padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-family: inherit; font-size: 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--accent-f); }
+  .form-select option { background: var(--surface2); }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-primary {
+    flex: 1; padding: 11px; border-radius: var(--radius-sm);
+    border: none; cursor: pointer; font-family: inherit;
+    font-size: 14px; font-weight: 600; transition: all .2s;
+  }
+  .btn-primary.f { background: var(--accent-f); color: #000; }
+  .btn-primary.p { background: var(--accent-p); color: #000; }
+  .btn-primary.s { background: var(--accent-sim); color: #000; }
+  .btn-cancel {
+    flex: 1; padding: 11px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; font-family: inherit;
+    font-size: 14px; transition: all .2s;
+  }
+  .btn-cancel:hover { background: var(--surface3); }
+
+  /* ── MONTH PICKER MODAL ── */
+  .month-picker-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-top: 12px;
+  }
+  .month-pick-btn {
+    padding: 10px 6px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; font-family: inherit;
+    font-size: 12px; font-weight: 500; text-align: center;
+    transition: all .2s;
+  }
+  .month-pick-btn:hover, .month-pick-btn.active {
+    background: var(--accent-f2); border-color: var(--accent-f); color: var(--accent-f);
+  }
+  .year-pick-row {
+    display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 4px;
+  }
+  .year-pick-label { font-size: 16px; font-weight: 700; }
+  .year-pick-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; transition: all .2s;
+  }
+  .year-pick-btn:hover { background: var(--surface3); color: var(--text); }
+
+  /* ── PANELS ── */
+  .panel-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 300; opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  .panel-overlay.open { opacity: 1; pointer-events: all; }
+  .panel {
+    position: fixed; right: 0; top: 0; bottom: 0;
+    width: 320px; background: var(--surface);
+    border-left: 1px solid var(--border);
+    padding: 20px; overflow-y: auto;
+    transform: translateX(100%); transition: transform .3s;
+    z-index: 301;
+  }
+  .panel-overlay.open .panel { transform: translateX(0); }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .panel-title { font-size: 15px; font-weight: 700; }
+  .close-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; display: flex;
+    align-items: center; justify-content: center; font-size: 14px;
+  }
+  .section-heading {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text3); margin: 14px 0 8px;
+  }
+  .user-list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 11px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    margin-bottom: 6px; cursor: pointer; transition: all .2s;
+  }
+  .user-list-item:hover { background: var(--surface3); }
+  .user-list-item.active { border-color: var(--accent-f); }
+  .user-list-info { display: flex; align-items: center; gap: 9px; }
+  .user-list-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    background: var(--accent-f2); color: var(--accent-f);
+  }
+  .user-list-name { font-size: 13px; font-weight: 600; }
+  .user-list-meta { font-size: 10px; color: var(--text3); }
+  .user-del-btn { color: var(--text3); cursor: pointer; font-size: 13px; transition: color .2s; padding: 4px; }
+  .user-del-btn:hover { color: var(--danger); }
+
+  .anno-config-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 11px; margin-bottom: 8px;
+  }
+  .anno-config-title { font-size: 12px; font-weight: 600; margin-bottom: 9px; }
+  .config-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .config-row .form-group { flex: 1; }
+  .config-input {
+    width: 100%; padding: 6px 9px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 12px; outline: none;
+  }
+  .config-input:focus { border-color: var(--accent-f); }
+  .config-label { font-size: 10px; color: var(--text3); margin-bottom: 3px; display: block; }
+
+  .backup-btn {
+    width: 100%; padding: 10px; border-radius: var(--radius-sm);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s; margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+  }
+  .backup-export { background: rgba(74,222,128,.12); border: 1px solid var(--accent-f); color: var(--accent-f); }
+  .backup-export:hover { background: var(--accent-f); color: #000; }
+  .backup-import { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
+  .backup-import:hover { background: var(--surface3); color: var(--text); }
+
+  .add-year-btn {
+    width: 100%; padding: 8px; border-radius: var(--radius-sm);
+    background: transparent; border: 1px dashed var(--border);
+    color: var(--text3); cursor: pointer; font-family: inherit;
+    font-size: 11px; margin-top: 6px; transition: all .2s;
+  }
+  .add-year-btn:hover { border-color: var(--accent-f); color: var(--accent-f); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--surface3); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 18px; border-radius: 20px;
+    font-size: 13px; font-weight: 500; z-index: 999;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── CALENDAR ── */
+  .cal-wrap { margin-top: 0; }
+  .cal-dow-row {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 3px; margin-bottom: 3px;
+  }
+  .cal-dow {
+    text-align: center; font-size: 10px; font-weight: 700;
+    color: var(--text3); text-transform: uppercase;
+    padding: 4px 0; letter-spacing: 0.5px;
+  }
+  .cal-dow.weekend { color: #4a5280; }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+  .cal-day {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500;
+    cursor: default; position: relative;
+    background: var(--surface); border: 1px solid var(--border);
+    transition: all .15s;
+    min-height: 38px;
+  }
+  .cal-day.empty { background: transparent; border-color: transparent; }
+  .cal-day.today { border-color: var(--text3); }
+  .cal-day.today .cal-day-num { font-weight: 800; color: var(--text); }
+  .cal-day.weekend { background: var(--bg); }
+  .cal-day.has-ferie {
+    background: rgba(74,222,128,.18);
+    border-color: rgba(74,222,128,.4);
+  }
+  .cal-day.has-ferie .cal-day-num { color: var(--accent-f); font-weight: 700; }
+  .cal-day.has-permesso {
+    background: rgba(96,165,250,.18);
+    border-color: rgba(96,165,250,.4);
+  }
+  .cal-day.has-permesso .cal-day-num { color: var(--accent-p); font-weight: 700; }
+  .cal-day.has-ferie.has-permesso {
+    background: linear-gradient(135deg, rgba(74,222,128,.18) 50%, rgba(96,165,250,.18) 50%);
+    border-color: rgba(74,222,128,.4);
+  }
+  .cal-day.sim-ferie {
+    background: rgba(245,158,11,.12);
+    border-color: rgba(245,158,11,.35);
+    border-style: dashed;
+  }
+  .cal-day.sim-ferie .cal-day-num { color: var(--accent-sim); }
+  .cal-day.sim-permesso {
+    background: rgba(96,165,250,.08);
+    border-color: rgba(245,158,11,.35);
+    border-style: dashed;
+  }
+  .cal-day.sim-permesso .cal-day-num { color: var(--accent-sim); }
+  .cal-day-num { font-size: 13px; line-height: 1; }
+  .cal-day-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    margin-top: 3px;
+  }
+  .cal-day-dot.f { background: var(--accent-f); }
+  .cal-day-dot.p { background: var(--accent-p); }
+  .cal-day-dot.s { background: var(--accent-sim); }
+  .cal-legend {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    padding: 12px 0 6px; align-items: center;
+  }
+  .cal-legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--text2);
+  }
+  .cal-legend-box {
+    width: 14px; height: 14px; border-radius: 4px; border: 1px solid;
+  }
+  .cal-legend-box.f { background: rgba(74,222,128,.18); border-color: rgba(74,222,128,.4); }
+  .cal-legend-box.p { background: rgba(96,165,250,.18); border-color: rgba(96,165,250,.4); }
+  .cal-legend-box.s { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); border-style: dashed; }
+  .cal-legend-box.fp { background: linear-gradient(135deg,rgba(74,222,128,.18) 50%,rgba(96,165,250,.18) 50%); border-color: rgba(74,222,128,.4); }
+  .cal-tooltip {
+    position: fixed; z-index: 500;
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+    font-size: 12px; color: var(--text);
+    pointer-events: none; max-width: 200px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    display: none;
+  }
+  .cal-tooltip.show { display: block; }
+  .cal-month-summary {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .cal-sum-item { flex: 1; min-width: 100px; }
+  .cal-sum-label { font-size: 10px; color: var(--text3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .cal-sum-val { font-size: 16px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .cal-sum-val.f { color: var(--accent-f); }
+  .cal-sum-val.p { color: var(--accent-p); }
+  .cal-sum-val.s { color: var(--accent-sim); }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="app-header">
+  <div class="app-title">Ferie <span>&</span> Permessi</div>
+  <div class="header-right">
+    <button class="icon-btn" onclick="openSettingsPanel()" title="Impostazioni">⚙️</button>
+    <button class="icon-btn" onclick="openBackupPanel()" title="Backup">💾</button>
+    <div class="user-chip" onclick="openUserPanel()">
+      <div class="user-avatar" id="headerAvatar">?</div>
+      <span id="headerUserName">Utente</span>
+    </div>
+  </div>
+</header>
+
+<!-- NAV TABS -->
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="ufficiale" onclick="switchTab('ufficiale')">📋 Piano Ufficiale</div>
+  <div class="nav-tab sim-tab" data-tab="simulazione" onclick="switchTab('simulazione')">🔮 Simulazione</div>
+  <div class="nav-tab cal-tab" data-tab="calendario" onclick="switchTab('calendario')">📅 Calendario</div>
+</div>
+
+<!-- MONTH NAVIGATOR (sticky) -->
+<div id="stickyTop" style="position:sticky;top:54px;z-index:90;background:var(--bg);">
+<div class="month-nav">
+  <button class="nav-arrow" onclick="changeMonth(-1)">‹</button>
+  <div class="month-label-wrap" onclick="openMonthPicker()">
+    <div class="month-label-main" id="monthLabelMain">Gennaio 2025</div>
+    <div class="month-label-year" id="monthLabelSub">tocca per scegliere</div>
+  </div>
+  <button class="nav-arrow" onclick="changeMonth(1)">›</button>
+</div>
+</div><!-- /stickyTop -->
+
+<!-- SUMMARY CARDS -->
+<div class="summary-grid">
+  <div class="summary-section ferie">
+    <div class="section-title ferie">🌴 Ferie</div>
+    <div class="year-block">
+      <div class="year-block-label">Anno Prec. (<span id="prevYearLabelF">—</span>)</div>
+      <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value green" id="fpMat">—</span></div>
+      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="fpUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="fpRes">—</span></div>
+    </div>
+    <div class="year-divider"></div>
+    <div class="year-block">
+      <div class="year-block-label">Anno Corr. (<span id="currYearLabelF">—</span>)</div>
+      <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value green" id="fcMat">—</span></div>
+      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="fcUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="fcRes">—</span></div>
+    </div>
+  </div>
+  <div class="summary-section permessi">
+    <div class="section-title permessi">🕐 Permessi</div>
+    <div class="year-block">
+      <div class="year-block-label">Anno Prec. (<span id="prevYearLabelP">—</span>)</div>
+      <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="ppMat">—</span></div>
+      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="ppUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
+    </div>
+    <div class="year-divider"></div>
+    <div class="year-block">
+      <div class="year-block-label">Anno Corr. (<span id="currYearLabelP">—</span>)</div>
+      <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="pcMat">—</span></div>
+      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="pcUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="pcRes">—</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESSIVO + MATURAZIONE + UTILIZZO MESE -->
+<div class="month-info-bar" id="monthInfoBar" style="flex-direction:column;gap:8px;">
+  <div style="display:flex;gap:0;width:100%">
+    <div class="month-mat-item">
+      <span class="month-mat-label">Saldo inizio mese (F)</span>
+      <span class="month-mat-value" style="color:var(--text2)" id="mSaldoInizioferie">—</span>
+    </div>
+    <div class="month-mat-divider"></div>
+    <div class="month-mat-item">
+      <span class="month-mat-label">Saldo inizio mese (P)</span>
+      <span class="month-mat-value" style="color:var(--text2)" id="mSaldoInizioPerm">—</span>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--border);width:100%"></div>
+  <div style="display:flex;gap:0;width:100%">
+    <div class="month-mat-item">
+      <span class="month-mat-label">Ferie maturate mese</span>
+      <span class="month-mat-value f" id="mMaturazioneFerie">—</span>
+    </div>
+    <div class="month-mat-divider"></div>
+    <div class="month-mat-item">
+      <span class="month-mat-label">Permessi maturati mese</span>
+      <span class="month-mat-value p" id="mMaturazionePerm">—</span>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--border);width:100%"></div>
+  <div style="display:flex;gap:0;width:100%">
+    <div class="month-mat-item">
+      <span class="month-mat-label">Ferie utilizzate mese</span>
+      <span class="month-mat-value" style="color:var(--danger)" id="mUsateFerie">—</span>
+    </div>
+    <div class="month-mat-divider"></div>
+    <div class="month-mat-item">
+      <span class="month-mat-label">Permessi utilizzati mese</span>
+      <span class="month-mat-value" style="color:var(--danger)" id="mUsatePerm">—</span>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--border);width:100%"></div>
+  <div style="display:flex;gap:0;width:100%">
+    <div class="month-mat-item">
+      <span class="month-mat-label">Saldo fine mese (F)</span>
+      <span class="month-mat-value" style="color:var(--text)" id="mSaldoFineFerie">—</span>
+    </div>
+    <div class="month-mat-divider"></div>
+    <div class="month-mat-item">
+      <span class="month-mat-label">Saldo fine mese (P)</span>
+      <span class="month-mat-value" style="color:var(--text)" id="mSaldoFinePerm">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ACTION BUTTONS -->
+<div class="action-row" id="actionRow"></div>
+
+<!-- CONFIRM SIM (rimosso: ora per singola voce) -->
+<div id="confirmSimRow" style="display:none"></div>
+
+<!-- ENTRIES -->
+<div class="entries-container" id="entriesContainer"></div>
+<div id="calendarContainer" style="display:none;padding:0 12px 100px"></div>
+<div id="calendarContainer" style="display:none;padding:0 12px 100px"></div>
+
+<!-- ══ MODALI ══ -->
+
+<!-- Entry Modal -->
+<div class="modal-overlay" id="entryModal">
+  <div class="modal">
+    <div class="modal-title" id="entryModalTitle">Inserisci Ferie</div>
+    <div class="form-row" id="dateRowFerie">
+      <div class="form-group">
+        <label class="form-label">Data inizio</label>
+        <input type="date" class="form-input" id="entryDateFrom">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data fine</label>
+        <input type="date" class="form-input" id="entryDateTo">
+      </div>
+    </div>
+    <div class="form-group" id="dateRowPermesso" style="display:none">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-input" id="entryDateSingle">
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:4px" id="entryMonthHint">
+      📅 <span style="text-decoration:underline;cursor:pointer" onclick="openEntryMonthPicker()">Cambia mese di riferimento</span>
+    </div>
+    <div class="form-group" id="ferieQtyGroup">
+      <label class="form-label">Giorni <span id="calcModeHint" style="color:var(--text3);font-weight:400"></span></label>
+      <input type="number" class="form-input" id="entryQtyFerie" step="0.5" min="0.5" placeholder="calcolati automaticamente">
+    </div>
+    <div class="form-group" id="permessoOreGroup" style="display:none">
+      <label class="form-label">Ore</label>
+      <input type="number" class="form-input" id="entryQtyOre" step="0.5" min="0.5" placeholder="es. 4">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (opzionale)</label>
+      <input type="text" class="form-input" id="entryNote" placeholder="Vacanza, visita medica…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeEntryModal()">Annulla</button>
+      <button class="btn-primary f" id="entryConfirmBtn" onclick="saveEntry()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Month Picker Modal -->
+<div class="modal-overlay" id="monthPickerModal">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--text2)">Scegli Mese</div>
+    <div class="year-pick-row">
+      <button class="year-pick-btn" onclick="pickerChangeYear(-1)">‹</button>
+      <span class="year-pick-label" id="pickerYearLabel">2025</span>
+      <button class="year-pick-btn" onclick="pickerChangeYear(1)">›</button>
+    </div>
+    <div class="month-picker-grid" id="monthPickerGrid"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-cancel" onclick="closeMonthPicker()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Panel -->
+<div class="panel-overlay" id="userPanel">
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">👤 Utenti</span>
+      <button class="close-btn" onclick="closeUserPanel()">✕</button>
+    </div>
+    <div class="section-heading">Utenti Salvati</div>
+    <div id="userListContainer"></div>
+    <div class="section-heading" style="margin-top:14px">Nuovo Utente</div>
+    <div class="form-group">
+      <label class="form-label">Nome</label>
+      <input type="text" class="form-input" id="newUserName" placeholder="Es. Mario Rossi">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Data Inizio Contratto</label>
+      <input type="date" class="form-input" id="newUserDataInizio" placeholder="es. 2023-09-01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Calcolo Ferie</label>
+      <select class="form-select" id="newUserCalcMode">
+        <option value="1">× 1 — Standard</option>
+        <option value="1.2">× 1.2 — CCNL Commercio (5gg)</option>
+      </select>
+    </div>
+    <button class="btn-primary f" style="width:100%;padding:10px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;" onclick="addUser()">+ Aggiungi Utente</button>
+  </div>
+</div>
+
+<!-- Settings Panel -->
+<div class="panel-overlay" id="settingsPanel">
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">⚙️ Impostazioni Anno</span>
+      <button class="close-btn" onclick="closeSettingsPanel()">✕</button>
+    </div>
+    <div id="settingsContent"></div>
+  </div>
+</div>
+
+<!-- Backup Panel -->
+<div class="panel-overlay" id="backupPanel">
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">💾 Backup Dati</span>
+      <button class="close-btn" onclick="closeBackupPanel()">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">Esporta i tuoi dati in un file JSON per backup. Importa per ripristinare.</p>
+    <button class="backup-btn backup-export" onclick="exportBackup()">⬇️ Esporta Backup JSON</button>
+    <button class="backup-btn backup-import" onclick="document.getElementById('importFile').click()">⬆️ Importa Backup JSON</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+    <div class="section-heading" style="margin-top:14px">Statistiche</div>
+    <div id="backupStats" style="font-size:12px;color:var(--text2);line-height:2;"></div>
+    <div style="margin-top:18px">
+      <button class="backup-btn" style="background:rgba(248,113,113,.08);border:1px solid var(--danger);color:var(--danger)" onclick="resetAllData()">🗑️ Reset Tutti i Dati</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  DATA MODEL
+// ═══════════════════════════════════════════════
+const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const MONTHS_SHORT = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+const STORAGE_KEY = 'feriePermessi_v3';
+
+let db = { users: [], currentUserId: null };
+
+function loadDb() {
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) db = JSON.parse(r); } catch(e) {}
+  if (!db.users || !db.users.length) {
+    const uid = genId();
+    const y = new Date().getFullYear();
+    db = {
+      users: [{
+        id: uid, name: 'Utente', calcMode: '1',
+        permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
+        anni: {
+          [y-1]: { ferieAnnue: 26, permessiOreAnnui: 100 },
+          [y]:   { ferieAnnue: 26, permessiOreAnnui: 100 }
+        },
+        entries: []
+      }],
+      currentUserId: uid
+    };
+    saveDb();
+  }
+  if (!db.currentUserId) db.currentUserId = db.users[0].id;
+}
+
+function saveDb() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function currentUser() { return db.users.find(u => u.id === db.currentUserId) || db.users[0]; }
+function getAnnoCfg(user, year) {
+  if (!user.anni) user.anni = {};
+  if (!user.anni[year]) user.anni[year] = { ferieAnnue: 26, permessiOreAnnui: 100 };
+  return user.anni[year];
+}
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+const now = new Date();
+let viewYear  = now.getFullYear();
+let viewMonth = now.getMonth() + 1; // 1..12
+let currentTab = 'ufficiale';
+let entryType  = 'ferie';
+let pickerYear = viewYear;
+
+
+// ═══════════════════════════════════════════════
+//  CALCULATIONS
+// ═══════════════════════════════════════════════
+
+// Mesi lavorati in un dato anno, considerando la data inizio contratto
+function getMesiLavoratiAnno(user, year) {
+  const today = new Date();
+  let meseInizio = 1;
+  if (user.dataInizioContratto) {
+    const d = new Date(user.dataInizioContratto);
+    const annoInizio = d.getFullYear();
+    if (year < annoInizio) return 0;
+    if (year === annoInizio) meseInizio = d.getMonth() + 1;
+  }
+  let meseFine;
+  if (year < today.getFullYear()) meseFine = 12;
+  else if (year > today.getFullYear()) meseFine = 0;
+  else meseFine = today.getMonth() + 1;
+  return Math.max(0, meseFine - meseInizio + 1);
+}
+
+/*
+ * Per CCNL Commercio (calcMode=1.2) i permessi crescono con l'anzianità:
+ *   0-2 anni dalla data assunzione  → permessiCCNL.anni02
+ *   2-4 anni dalla data assunzione  → permessiCCNL.anni24
+ *   5+ anni dalla data assunzione   → permessiCCNL.anni5plus
+ * Per gli altri contratti si usa sempre cfg.permessiOreAnnui.
+ * Il calcolo è proporzionale al mese (come la data inizio contratto).
+ */
+function getPermessiOrePerMese(user, year, month) {
+  // se non CCNL o no data inizio → usa valore configurato manualmente
+  if (parseFloat(user.calcMode||'1') !== 1.2 || !user.dataInizioContratto) {
+    const cfg = getAnnoCfg(user, String(year));
+    return (cfg.permessiOreAnnui || 0) / 12;
+  }
+  const ccnl = user.permessiCCNL || { anni02: 32, anni24: 68, anni5plus: 104 };
+  const inizio = new Date(user.dataInizioContratto);
+  // data del primo giorno del mese considerato
+  const dataRef = new Date(year, month - 1, 1);
+  // mesi di anzianità al 1° del mese
+  const mesiAnz = (dataRef.getFullYear() - inizio.getFullYear()) * 12
+                + (dataRef.getMonth()    - inizio.getMonth());
+  if (mesiAnz < 0) return 0; // non ancora assunto
+  let oreAnnue;
+  if      (mesiAnz < 24) oreAnnue = ccnl.anni02    || 32;
+  else if (mesiAnz < 48) oreAnnue = ccnl.anni24    || 68;
+  else                   oreAnnue = ccnl.anni5plus || 104;
+  return oreAnnue / 12;
+}
+
+// Maturazione annua totale per un dato anno
+// Per i permessi somma mese per mese perché lo scaglione può cambiare
+function getAnnualMat(user, year) {
+  const cfg  = getAnnoCfg(user, String(year));
+  const today = new Date();
+  let meseInizio = 1;
+  if (user.dataInizioContratto) {
+    const d = new Date(user.dataInizioContratto);
+    if (d.getFullYear() > year) return { ferie: 0, permessi: 0 };
+    if (d.getFullYear() === year) meseInizio = d.getMonth() + 1;
+  }
+  let meseFine;
+  if (year < today.getFullYear()) meseFine = 12;
+  else if (year > today.getFullYear()) meseFine = 0;
+  else meseFine = today.getMonth() + 1;
+  if (meseFine < meseInizio) return { ferie: 0, permessi: 0 };
+
+  const mesiLav = meseFine - meseInizio + 1;
+  const ferieAnnua = +((cfg.ferieAnnue || 0) / 12 * mesiLav).toFixed(2);
+
+  // permessi: somma mese per mese per gestire cambio scaglione
+  let permTot = 0;
+  for (let m = meseInizio; m <= meseFine; m++) {
+    permTot += getPermessiOrePerMese(user, year, m);
+  }
+  return { ferie: ferieAnnua, permessi: +permTot.toFixed(2) };
+}
+
+// Maturazione di un singolo mese
+function getMonthMat(user, year, month) {
+  const cfg = getAnnoCfg(user, String(year));
+  if (user.dataInizioContratto) {
+    const d = new Date(user.dataInizioContratto);
+    const annoInizio = d.getFullYear();
+    const meseInizio = d.getMonth() + 1;
+    if (year < annoInizio) return { ferie: 0, permessi: 0 };
+    if (year === annoInizio && month < meseInizio) return { ferie: 0, permessi: 0 };
+  }
+  return {
+    ferie:    +((cfg.ferieAnnue || 0) / 12).toFixed(4),
+    permessi: +getPermessiOrePerMese(user, year, month).toFixed(4)
+  };
+}
+
+// Totale utilizzate in un anno (solo uff, o uff+sim)
+// Restituisce sia il valore raw (giorni inseriti) sia quello effettivo (×calcMode per ferie)
+function getYearUsed(user, year, simMode) {
+  const calcMode = parseFloat(user.calcMode || '1');
+  const entries = (user.entries || []).filter(e =>
+    e.anno === year && (simMode ? true : !e.sim)
+  );
+  let ferieRaw = 0, ferieEff = 0, permUsed = 0;
+  entries.forEach(e => {
+    if (e.tipo === 'ferie') {
+      ferieRaw += (e.qty || 0);
+      ferieEff += (e.qty || 0) * calcMode;
+    }
+    if (e.tipo === 'permesso') permUsed += (e.qty || 0);
+  });
+  return {
+    ferieRaw:  +ferieRaw.toFixed(2),   // giorni inseriti senza moltiplicatore
+    ferieUsed: +ferieEff.toFixed(2),   // giorni effettivi (×calcMode) — per display
+    permUsed:  +permUsed.toFixed(2)
+  };
+}
+
+/*
+ * LOGICA SCALATURA:
+ * Le ferie/permessi usate nell'anno corrente scalano prima dai residui
+ * dell'anno precedente, poi dall'anno corrente.
+ *
+ * Residuo anno prec = mat_prec - used_prec_effettivo
+ * used_corrente_da_prec = min(used_corrente, residuo_prec)  [≥0]
+ * used_corrente_da_curr = used_corrente - used_corrente_da_prec
+ *
+ * Residuo anno prec netto = residuo_prec - used_corrente_da_prec
+ * Residuo anno corr       = mat_corr - used_corrente_da_curr
+ */
+function getYearTotals(user, year, simMode) {
+  const mat      = getAnnualMat(user, year);
+  const used     = getYearUsed(user, year, simMode);
+  const calcMode = parseFloat(user.calcMode || '1');
+
+  // Residuo puro anno precedente in RAW — sempre solo voci ufficiali (no sim)
+  const prevMat  = getAnnualMat(user, year - 1);
+  const prevUsed = getYearUsed(user, year - 1, false);
+  const prevResRawF = Math.max(0, +(prevMat.ferie    - prevUsed.ferieRaw).toFixed(2));
+  const prevResP    = Math.max(0, +(prevMat.permessi - prevUsed.permUsed).toFixed(2));
+
+  // Quanto del residuo prec viene consumato dalle voci anno corrente (in RAW)
+  const consumedPrevRawF = +Math.min(used.ferieRaw, prevResRawF).toFixed(2);
+  const consumedPrevP    = +Math.min(used.permUsed, prevResP).toFixed(2);
+
+  // Residuo netto anno prec = residuo prec - quanto scalato dall'anno corrente
+  const prevResNetRawF = +(prevResRawF - consumedPrevRawF).toFixed(2);
+  const prevResNetP    = +(prevResP    - consumedPrevP).toFixed(2);
+
+  // Residuo anno corrente = maturate - TUTTO usato nell'anno corrente (raw)
+  // Il ×1.2 NON riduce il contatore raw: 14gg inseriti = 14gg scalati dalle maturate
+  const currResRawF = +(mat.ferie    - used.ferieRaw).toFixed(2);
+  const currResP    = +(mat.permessi - used.permUsed).toFixed(2);
+
+  return {
+    prevFerieMat:  prevMat.ferie,
+    prevFerieUsed: prevUsed.ferieUsed,
+    prevFerieRes:  +(prevResNetRawF * calcMode).toFixed(2),
+    prevPermMat:   prevMat.permessi,
+    prevPermUsed:  prevUsed.permUsed,
+    prevPermRes:   prevResNetP,
+    ferieMat:      mat.ferie,
+    ferieUsed:     used.ferieUsed,
+    ferieRes:      +(currResRawF * calcMode).toFixed(2),
+    permessiMat:   mat.permessi,
+    permessiUsed:  used.permUsed,
+    permessiRes:   currResP
+  };
+}
+
+// Utilizzate nel mese corrente visualizzato
+function getMonthUsed(user, year, month, simMode) {
+  const calcMode = parseFloat(user.calcMode || '1');
+  const entries = (user.entries || []).filter(e =>
+    e.anno === year && e.mese === month && (simMode ? true : !e.sim)
+  );
+  let ferieRaw = 0, ferieEff = 0, permUsed = 0;
+  entries.forEach(e => {
+    if (e.tipo === 'ferie') {
+      ferieRaw += (e.qty || 0);
+      ferieEff += (e.qty || 0) * calcMode;
+    }
+    if (e.tipo === 'permesso') permUsed += (e.qty || 0);
+  });
+  return {
+    ferieRaw:  +ferieRaw.toFixed(2),
+    ferieUsed: +ferieEff.toFixed(2),
+    permUsed:  +permUsed.toFixed(2)
+  };
+}
+
+/*
+ * Saldo progressivo a inizio e fine mese.
+ * Tutto il calcolo avviene in giorni RAW (senza ×calcMode),
+ * e solo al momento del display si converte in effettivi.
+ */
+function getMonthSaldo(user, year, month, simMode) {
+  const calcMode = parseFloat(user.calcMode || '1');
+
+  // Residuo puro anno precedente in RAW — sempre solo voci ufficiali (no sim)
+  const prevMat  = getAnnualMat(user, year - 1);
+  const prevUsed = getYearUsed(user, year - 1, false);
+  const residuoPrevF = Math.max(0, +(prevMat.ferie    - prevUsed.ferieRaw).toFixed(2));
+  const residuoPrevP = Math.max(0, +(prevMat.permessi - prevUsed.permUsed).toFixed(2));
+
+  // Accumula mesi 1..month-1 in RAW
+  let matCumF = 0, matCumP = 0, usedCumRawF = 0, usedCumP = 0;
+  for (let m = 1; m < month; m++) {
+    const mm = getMonthMat(user, year, m);
+    const mu = getMonthUsed(user, year, m, simMode);
+    matCumF    += mm.ferie;
+    matCumP    += mm.permessi;
+    usedCumRawF += mu.ferieRaw;
+    usedCumP   += mu.permUsed;
+  }
+  // Saldo inizio mese in RAW, poi converti in eff per display
+  const saldoInizioRawF = +(residuoPrevF + matCumF - usedCumRawF).toFixed(2);
+  const saldoInizioP    = +(residuoPrevP + matCumP - usedCumP).toFixed(2);
+
+  // Saldo fine mese
+  const thisMat  = getMonthMat(user, year, month);
+  const thisUsed = getMonthUsed(user, year, month, simMode);
+  const saldoFineRawF = +(saldoInizioRawF + thisMat.ferie    - thisUsed.ferieRaw).toFixed(2);
+  const saldoFineP    = +(saldoInizioP    + thisMat.permessi - thisUsed.permUsed).toFixed(2);
+
+  return {
+    saldoInizioF: +(saldoInizioRawF * calcMode).toFixed(2),
+    saldoInizioP,
+    saldoFineF:   +(saldoFineRawF * calcMode).toFixed(2),
+    saldoFineP
+  };
+}
+
+
+// ═══════════════════════════════════════════════
+//  FORMAT
+// ═══════════════════════════════════════════════
+function fmt(n, unit) {
+  if (n === undefined || n === null || isNaN(n)) return '—';
+  const s = n % 1 === 0 ? n.toString() : n.toFixed(2);
+  return s + (unit || '');
+}
+
+// ═══════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════
+function renderAll() {
+  const user = currentUser();
+  renderHeaderUI(user);
+  renderSummary(user);
+  renderMonthInfo(user);
+  showHideCalendar(user);
+  if (currentTab !== 'calendario') {
+    renderActionRow();
+    renderEntries(user);
+  }
+}
+
+function renderHeaderUI(user) {
+  document.getElementById('headerAvatar').textContent    = (user.name||'?').charAt(0).toUpperCase();
+  document.getElementById('headerUserName').textContent  = user.name || 'Utente';
+
+  // month navigator
+  const simMode = currentTab === 'simulazione';
+  const simHtml = simMode ? '<span class="sim-badge">SIM</span>' : '';
+  document.getElementById('monthLabelMain').innerHTML = MONTHS[viewMonth-1] + ' ' + viewYear + simHtml;
+  document.getElementById('monthLabelSub').textContent = 'tocca per scegliere';
+}
+
+function renderSummary(user) {
+  const simMode = currentTab === 'simulazione';
+  // getYearTotals(user, year) now contains both prev and curr data for viewYear
+  const t = getYearTotals(user, viewYear, simMode);
+  const calcLabel = parseFloat(user.calcMode||'1') === 1.2 ? ' (×1.2)' : '';
+
+  document.getElementById('prevYearLabelF').textContent = viewYear - 1;
+  document.getElementById('prevYearLabelP').textContent = viewYear - 1;
+  document.getElementById('currYearLabelF').textContent = viewYear;
+  document.getElementById('currYearLabelP').textContent = viewYear;
+
+  document.getElementById('fpMat').textContent  = fmt(t.prevFerieMat,  ' gg');
+  document.getElementById('fpUsed').textContent = fmt(t.prevFerieUsed, ' gg' + calcLabel);
+  document.getElementById('fpRes').textContent  = fmt(t.prevFerieRes,  ' gg');
+  document.getElementById('ppMat').textContent  = fmt(t.prevPermMat,   'h');
+  document.getElementById('ppUsed').textContent = fmt(t.prevPermUsed,  'h');
+  document.getElementById('ppRes').textContent  = fmt(t.prevPermRes,   'h');
+
+  document.getElementById('fcMat').textContent  = fmt(t.ferieMat,      ' gg');
+  document.getElementById('fcUsed').textContent = fmt(t.ferieUsed,     ' gg' + calcLabel);
+  document.getElementById('fcRes').textContent  = fmt(t.ferieRes,      ' gg');
+  document.getElementById('pcMat').textContent  = fmt(t.permessiMat,   'h');
+  document.getElementById('pcUsed').textContent = fmt(t.permessiUsed,  'h');
+  document.getElementById('pcRes').textContent  = fmt(t.permessiRes,   'h');
+}
+
+function renderMonthInfo(user) {
+  const simMode = currentTab === 'simulazione';
+  const mat     = getMonthMat(user, viewYear, viewMonth);
+  const used    = getMonthUsed(user, viewYear, viewMonth, simMode);
+  const saldo   = getMonthSaldo(user, viewYear, viewMonth, simMode);
+
+  document.getElementById('mSaldoInizioferie').textContent = fmt(saldo.saldoInizioF, ' gg');
+  document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP, 'h');
+  document.getElementById('mMaturazioneFerie').textContent = fmt(mat.ferie,           ' gg');
+  document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,        'h');
+  document.getElementById('mUsateFerie').textContent       = fmt(used.ferieUsed,      ' gg');
+  document.getElementById('mUsatePerm').textContent        = fmt(used.permUsed,       'h');
+  document.getElementById('mSaldoFineFerie').textContent   = fmt(saldo.saldoFineF,    ' gg');
+  document.getElementById('mSaldoFinePerm').textContent    = fmt(saldo.saldoFineP,    'h');
+}
+
+function renderActionRow() {
+  const ar = document.getElementById('actionRow');
+  const simMode = currentTab === 'simulazione';
+  if (simMode) {
+    ar.innerHTML = `
+      <button class="action-btn sim-btn" onclick="openEntryModal('ferie')">🔮 Simula Ferie</button>
+      <button class="action-btn sim-btn" onclick="openEntryModal('permesso')">🔮 Simula Permesso</button>`;
+  } else {
+    ar.innerHTML = `
+      <button class="action-btn ferie-btn" onclick="openEntryModal('ferie')">🌴 Inserisci Ferie</button>
+      <button class="action-btn permesso-btn" onclick="openEntryModal('permesso')">🕐 Inserisci Permesso</button>`;
+  }
+}
+
+function renderEntries(user) {
+  const simMode  = currentTab === 'simulazione';
+  const calcMode = parseFloat(user.calcMode || '1');
+
+  // Voci ufficiali del mese
+  const official = (user.entries || []).filter(e =>
+    e.anno === viewYear && e.mese === viewMonth && !e.sim
+  );
+  // Voci simulate del mese
+  const simulated = (user.entries || []).filter(e =>
+    e.anno === viewYear && e.mese === viewMonth && e.sim
+  );
+
+  // confirm sim button: visibile solo in tab simulazione se ci sono voci simulate
+  const confirmRow = document.getElementById('confirmSimRow');
+  confirmRow.style.display = (simMode && simulated.length > 0) ? '' : 'none';
+
+  const container = document.getElementById('entriesContainer');
+
+  // In tab ufficiale: solo official
+  // In tab simulazione: official (readonly) + simulated (eliminabili)
+  const toShow = simMode ? [...official, ...simulated] : official;
+
+  if (toShow.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${simMode ? '🔮' : '🌴'}</div>
+        <div>Nessuna voce per ${MONTHS[viewMonth-1]} ${viewYear}</div>
+      </div>`;
+    return;
+  }
+
+  function renderEntryCard(e, forceReadonly) {
+    const isSim = e.sim;
+    const dates = (e.dateTo && e.dateTo !== e.dateFrom) ? `${e.dateFrom} → ${e.dateTo}` : (e.dateFrom || '');
+    let cls, icon, cardType;
+    if (isSim) { cls = 's'; icon = '🔮'; cardType = 'sim'; }
+    else if (e.tipo === 'ferie') { cls = 'f'; icon = '🌴'; cardType = 'ferie'; }
+    else { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
+
+    const qty = e.tipo === 'ferie' ? fmt(e.qty * calcMode, ' gg') : fmt(e.qty, 'h');
+    const readonly = forceReadonly || (!isSim && simMode);
+    const badge = (!isSim && simMode) ? '<span style="font-size:9px;background:rgba(255,255,255,.07);color:var(--text3);padding:1px 5px;border-radius:8px;margin-left:4px">ufficiale</span>' : '';
+    let actions = '';
+    if (readonly) {
+      actions = '<span style="width:20px"></span>';
+    } else if (isSim) {
+      // voce simulata: tasto conferma + elimina
+      actions = `<span class="entry-confirm" onclick="confirmSingleEntry('${e.id}')">✅ Conferma</span>`
+              + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
+    } else {
+      actions = `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
+    }
+    return `
+      <div class="entry-card tipo-${cardType}" style="${readonly && simMode ? 'opacity:0.65' : ''}">
+        <div class="entry-inner">
+          <div class="entry-icon ${cls}">${icon}</div>
+          <div class="entry-body">
+            <div class="entry-title">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}${badge}</div>
+            <div class="entry-sub">${dates}</div>
+          </div>
+          <div class="entry-right">
+            <span class="entry-qty ${cls}">${qty}</span>
+            ${actions}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  let html = '';
+
+  // Sezione ufficiali (in sim mode, readonly)
+  const offFerie = toShow.filter(e => !e.sim && e.tipo === 'ferie');
+  const offPerm  = toShow.filter(e => !e.sim && e.tipo === 'permesso');
+  const simFerie = toShow.filter(e =>  e.sim && e.tipo === 'ferie');
+  const simPerm  = toShow.filter(e =>  e.sim && e.tipo === 'permesso');
+
+  if (offFerie.length || offPerm.length) {
+    if (simMode) html += `<div class="entries-section-label" style="color:var(--text3)">📋 Ferie & Permessi Ufficiali</div>`;
+    else         html += `<div class="entries-section-label">🌴 Ferie</div>`;
+    offFerie.forEach(e => { html += renderEntryCard(e, simMode); });
+    if (!simMode && offPerm.length) html += `<div class="entries-section-label">🕐 Permessi</div>`;
+    offPerm.forEach(e => { html += renderEntryCard(e, simMode); });
+  }
+
+  if (simFerie.length || simPerm.length) {
+    html += `<div class="entries-section-label" style="color:var(--accent-sim)">🔮 Voci Simulate</div>`;
+    simFerie.forEach(e => { html += renderEntryCard(e, false); });
+    simPerm.forEach(e  => { html += renderEntryCard(e, false); });
+  }
+
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+function changeMonth(delta) {
+  viewMonth += delta;
+  if (viewMonth > 12) { viewMonth = 1;  viewYear++; }
+  if (viewMonth < 1)  { viewMonth = 12; viewYear--; }
+  renderAll();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab)
+  );
+  renderAll();
+}
+
+function showHideCalendar(user) {
+  const isCalendar = currentTab === 'calendario';
+  document.getElementById('calendarContainer').style.display   = isCalendar ? '' : 'none';
+  document.getElementById('entriesContainer').style.display    = isCalendar ? 'none' : '';
+  document.getElementById('actionRow').style.display           = isCalendar ? 'none' : '';
+  document.getElementById('confirmSimRow').style.display       = isCalendar ? 'none' : 
+    (currentTab === 'simulazione' ? '' : 'none');
+  if (isCalendar) renderCalendar(user, true); // mostra sempre ufficiali + simulate
+}
+
+// ═══════════════════════════════════════════════
+//  MONTH PICKER
+// ═══════════════════════════════════════════════
+let pickerCallback = null; // funzione chiamata con (year, month) alla selezione
+
+function openMonthPicker(callbackFn, initialYear, activeYear, activeMonth) {
+  // callbackFn(year, month) — se null usa comportamento default (navigazione principale)
+  pickerCallback = callbackFn || null;
+  pickerYear = initialYear || viewYear;
+  document.getElementById('monthPickerModal').classList.add('open');
+  renderMonthPickerGrid(activeYear, activeMonth);
+}
+function closeMonthPicker() { document.getElementById('monthPickerModal').classList.remove('open'); pickerCallback = null; }
+function pickerChangeYear(d) { pickerYear += d; renderMonthPickerGrid(); }
+function renderMonthPickerGrid(activeYear, activeMonth) {
+  const ay = activeYear !== undefined ? activeYear : viewYear;
+  const am = activeMonth !== undefined ? activeMonth : viewMonth;
+  document.getElementById('pickerYearLabel').textContent = pickerYear;
+  const grid = document.getElementById('monthPickerGrid');
+  grid.innerHTML = MONTHS_SHORT.map((m, i) => {
+    const active = (i+1 === am && pickerYear === ay) ? ' active' : '';
+    return `<button class="month-pick-btn${active}" onclick="selectMonth(${pickerYear},${i+1})">${m}</button>`;
+  }).join('');
+}
+function selectMonth(year, month) {
+  closeMonthPicker();
+  if (pickerCallback) {
+    pickerCallback(year, month);
+  } else {
+    viewYear = year; viewMonth = month;
+    renderAll();
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ENTRY MODAL
+// ═══════════════════════════════════════════════
+// Picker mese per il modale inserimento:
+// cambia viewYear/viewMonth e aggiorna le date di default nel form
+function openEntryMonthPicker() {
+  // leggo il mese corrente dal campo data del form
+  const fromVal = document.getElementById('entryDateFrom').value
+               || document.getElementById('entryDateSingle').value;
+  let curYear = viewYear, curMonth = viewMonth;
+  if (fromVal) { curYear = parseInt(fromVal.slice(0,4)); curMonth = parseInt(fromVal.slice(5,7)); }
+
+  openMonthPicker(function(year, month) {
+    // aggiorna le date di default nel form
+    const pad = m => String(m).padStart(2,'0');
+    const defDate = year + '-' + pad(month) + '-01';
+    const fRow = document.getElementById('dateRowFerie');
+    const pRow = document.getElementById('dateRowPermesso');
+    if (fRow && fRow.style.display !== 'none') {
+      document.getElementById('entryDateFrom').value = defDate;
+      document.getElementById('entryDateTo').value   = defDate;
+      autoCalcDays();
+    } else {
+      document.getElementById('entryDateSingle').value = defDate;
+    }
+    // riapri il modale inserimento (il picker lo aveva chiuso)
+    document.getElementById('entryModal').classList.add('open');
+  }, curYear, curYear, curMonth);
+}
+
+function openEntryModal(tipo) {
+  entryType = tipo;
+  const simMode = currentTab === 'simulazione';
+  const title = document.getElementById('entryModalTitle');
+  const btn   = document.getElementById('entryConfirmBtn');
+  const fGrp  = document.getElementById('ferieQtyGroup');
+  const pGrp  = document.getElementById('permessoOreGroup');
+  const hint  = document.getElementById('calcModeHint');
+  const user  = currentUser();
+  const calcMode = parseFloat(user.calcMode || '1');
+
+  if (tipo === 'ferie') {
+    title.textContent = simMode ? '🔮 Simula Ferie' : '🌴 Inserisci Ferie';
+    title.className   = 'modal-title ' + (simMode ? 's' : 'f');
+    btn.className     = 'btn-primary ' + (simMode ? 's' : 'f');
+    fGrp.style.display = '';
+    pGrp.style.display = 'none';
+    hint.textContent  = calcMode === 1.2 ? '(×1.2 CCNL)' : '';
+  } else {
+    title.textContent = simMode ? '🔮 Simula Permesso' : '🕐 Inserisci Permesso';
+    title.className   = 'modal-title ' + (simMode ? 's' : 'p');
+    btn.className     = 'btn-primary ' + (simMode ? 's' : 'p');
+    fGrp.style.display = 'none';
+    pGrp.style.display = '';
+  }
+
+  // default date = primo giorno del mese visualizzato
+  const padM = String(viewMonth).padStart(2,'0');
+  const defDate = `${viewYear}-${padM}-01`;
+  document.getElementById('entryDateFrom').value   = defDate;
+  document.getElementById('entryDateTo').value     = defDate;
+  document.getElementById('entryDateSingle').value = defDate;
+  document.getElementById('entryQtyFerie').value   = '';
+  document.getElementById('entryQtyOre').value     = '';
+  document.getElementById('entryNote').value       = '';
+
+  // mostra i campi data corretti in base al tipo
+  document.getElementById('dateRowFerie').style.display    = (tipo === 'ferie')    ? '' : 'none';
+  document.getElementById('dateRowPermesso').style.display = (tipo === 'permesso') ? '' : 'none';
+
+  document.getElementById('entryModal').classList.add('open');
+
+  // ferie: quando si cambia dateFrom → auto-imposta dateTo = dateFrom e ricalcola
+  document.getElementById('entryDateFrom').oninput = function() {
+    document.getElementById('entryDateTo').value = this.value;
+    autoCalcDays();
+  };
+  document.getElementById('entryDateTo').oninput = autoCalcDays;
+}
+
+function autoCalcDays() {
+  if (entryType !== 'ferie') return;
+  const from = document.getElementById('entryDateFrom').value;
+  const to   = document.getElementById('entryDateTo').value;
+  if (!from || !to) return;
+  const d1 = new Date(from), d2 = new Date(to);
+  if (d2 < d1) return;
+  let count = 0;
+  const cur = new Date(d1);
+  while (cur <= d2) {
+    const dow = cur.getDay();
+    if (dow >= 1 && dow <= 5) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  document.getElementById('entryQtyFerie').value = count;
+}
+
+function closeEntryModal() { document.getElementById('entryModal').classList.remove('open'); }
+
+function saveEntry() {
+  const user    = currentUser();
+  const from = entryType === 'permesso'
+    ? document.getElementById('entryDateSingle').value
+    : document.getElementById('entryDateFrom').value;
+  const to   = entryType === 'permesso'
+    ? from
+    : (document.getElementById('entryDateTo').value || from);
+  const note    = document.getElementById('entryNote').value.trim();
+  const simMode = currentTab === 'simulazione';
+  if (!from) { showToast('Inserisci una data'); return; }
+
+  let qty;
+  if (entryType === 'ferie') {
+    qty = parseFloat(document.getElementById('entryQtyFerie').value);
+    if (!qty || qty <= 0) { showToast('Inserisci i giorni'); return; }
+  } else {
+    qty = parseFloat(document.getElementById('entryQtyOre').value);
+    if (!qty || qty <= 0) { showToast('Inserisci le ore'); return; }
+  }
+
+  const d    = new Date(from);
+  const anno = d.getFullYear();
+  const mese = d.getMonth() + 1;
+
+  if (!user.entries) user.entries = [];
+  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode });
+  saveDb();
+  closeEntryModal();
+  // aggiorna vista al mese dell'entry inserita
+  viewYear = anno; viewMonth = mese;
+  renderAll();
+  showToast(simMode ? '🔮 Voce simulata aggiunta' : '✅ Voce aggiunta');
+}
+
+function deleteEntry(id) {
+  const user = currentUser();
+  user.entries = (user.entries || []).filter(e => e.id !== id);
+  saveDb();
+  renderAll();
+  showToast('🗑 Voce eliminata');
+}
+
+function confirmSingleEntry(id) {
+  const user = currentUser();
+  const e = (user.entries || []).find(e => e.id === id);
+  if (!e || !e.sim) return;
+  e.sim = false;
+  saveDb(); renderAll();
+  showToast('✅ Voce confermata nel Piano Ufficiale');
+}
+
+function confirmSimMonth() {
+  const user = currentUser();
+  const simEntries = (user.entries || []).filter(e =>
+    e.anno === viewYear && e.mese === viewMonth && e.sim
+  );
+  if (!simEntries.length) return;
+  simEntries.forEach(e => e.sim = false);
+  saveDb(); renderAll();
+  showToast('✅ Tutte le voci simulate confermate');
+}
+
+// ═══════════════════════════════════════════════
+//  USER PANEL
+// ═══════════════════════════════════════════════
+function openUserPanel()  { document.getElementById('userPanel').classList.add('open'); renderUserList(); }
+function closeUserPanel() { document.getElementById('userPanel').classList.remove('open'); }
+
+function renderUserList() {
+  const c = document.getElementById('userListContainer');
+  c.innerHTML = '';
+  db.users.forEach(u => {
+    const isActive = u.id === db.currentUserId;
+    const div = document.createElement('div');
+    div.className = 'user-list-item' + (isActive ? ' active' : '');
+    div.innerHTML = `
+      <div class="user-list-info" onclick="selectUser('${u.id}')">
+        <div class="user-list-avatar">${(u.name||'?').charAt(0).toUpperCase()}</div>
+        <div>
+          <div class="user-list-name">${u.name}</div>
+          <div class="user-list-meta">Calcolo: ×${u.calcMode||'1'}${u.dataInizioContratto?' · Dal '+u.dataInizioContratto:''}${isActive?' · Attivo':''}</div>
+        </div>
+      </div>
+      ${!isActive ? `<span class="user-del-btn" onclick="deleteUser('${u.id}')">🗑</span>` : ''}`;
+    c.appendChild(div);
+  });
+}
+
+function selectUser(id) {
+  db.currentUserId = id; saveDb();
+  closeUserPanel(); renderAll();
+}
+
+function addUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  if (!name) { showToast('Inserisci il nome'); return; }
+  const calcMode = document.getElementById('newUserCalcMode').value;
+  const dataInizio = document.getElementById('newUserDataInizio').value || null;
+  const y = viewYear;
+  const uid = genId();
+  // anno di inizio potrebbe essere diverso da viewYear
+  const annoInizio = dataInizio ? new Date(dataInizio).getFullYear() : y - 1;
+  const anniObj = {};
+  for (let ay = annoInizio; ay <= y; ay++) {
+    anniObj[ay] = { ferieAnnue: 26, permessiOreAnnui: 100 };
+  }
+  db.users.push({
+    id: uid, name, calcMode, dataInizioContratto: dataInizio,
+    permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
+    anni: anniObj,
+    entries: []
+  });
+  db.currentUserId = uid;
+  saveDb();
+  document.getElementById('newUserName').value = '';
+  renderUserList();
+  closeUserPanel();
+  renderAll();
+  showToast('✅ Utente aggiunto');
+}
+
+function deleteUser(id) {
+  if (db.users.length <= 1) { showToast('Non puoi eliminare l\'unico utente'); return; }
+  if (!confirm('Eliminare utente e tutti i suoi dati?')) return;
+  db.users = db.users.filter(u => u.id !== id);
+  saveDb(); renderUserList();
+}
+
+// ═══════════════════════════════════════════════
+//  SETTINGS PANEL
+// ═══════════════════════════════════════════════
+function openSettingsPanel()  { document.getElementById('settingsPanel').classList.add('open'); renderSettingsContent(); }
+function closeSettingsPanel() { document.getElementById('settingsPanel').classList.remove('open'); }
+
+function buildCCNLScattiHtml(user, ccnl) {
+  if (!user.dataInizioContratto) return '';
+  const d     = new Date(user.dataInizioContratto);
+  const scatt1 = new Date(d); scatt1.setMonth(scatt1.getMonth() + 24);
+  const scatt2 = new Date(d); scatt2.setMonth(scatt2.getMonth() + 48);
+  const fmtD  = dt => dt.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  return '<div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.8;border-top:1px solid var(--border);padding-top:8px">'
+    + 'Scatto a ' + (ccnl.anni24 || 68) + 'h/anno: <strong style="color:var(--accent-p)">' + fmtD(scatt1) + '</strong><br>'
+    + 'Scatto a ' + (ccnl.anni5plus || 104) + 'h/anno: <strong style="color:var(--accent-p)">' + fmtD(scatt2) + '</strong>'
+    + '</div>';
+}
+
+function renderSettingsContent() {
+  const user  = currentUser();
+  const years = Object.keys(user.anni || {}).map(Number).sort();
+  const c     = document.getElementById('settingsContent');
+  const isCCNL = parseFloat(user.calcMode||'1') === 1.2;
+  const ccnl   = user.permessiCCNL || { anni02: 32, anni24: 68, anni5plus: 104 };
+
+  let html = `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.8">
+    Utente: <strong style="color:var(--text)">${user.name}</strong><br>
+    Calcolo ferie: <strong style="color:var(--accent-f)">×${user.calcMode||'1'}</strong>
+    ${isCCNL ? '<span style="font-size:10px;color:var(--text3)"> (CCNL Commercio)</span>' : ''}
+  </div>
+  <div style="margin-bottom:14px">
+    <span class="config-label" style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Data Inizio Contratto</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="date" class="config-input" style="flex:1" id="contractDateInput" value="${user.dataInizioContratto||''}">
+      <button onclick="saveContractDate()" style="padding:6px 12px;background:var(--accent-f);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap">Salva</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">
+      Imposta la data di assunzione per il calcolo proporzionale delle maturazioni
+    </div>
+  </div>
+  ${isCCNL ? `
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(96,165,250,.3)">
+    <div class="anno-config-title" style="color:var(--accent-p)">🕐 Permessi CCNL Commercio (scaglioni)</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      Le ore crescono con l'anzianità dalla data di assunzione.<br>
+      Il cambio avviene esattamente al mese di scatto.
+    </div>
+    <div class="config-row">
+      <div class="form-group">
+        <span class="config-label">Anni 0–2</span>
+        <input type="number" class="config-input" value="${ccnl.anni02||32}"
+          onchange="updateCCNLPermessi('anni02',this.value)" min="0" step="1">
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">ore/anno</div>
+      </div>
+      <div class="form-group">
+        <span class="config-label">Anni 2–4</span>
+        <input type="number" class="config-input" value="${ccnl.anni24||68}"
+          onchange="updateCCNLPermessi('anni24',this.value)" min="0" step="1">
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">ore/anno</div>
+      </div>
+      <div class="form-group">
+        <span class="config-label">Anni 5+</span>
+        <input type="number" class="config-input" value="${ccnl.anni5plus||104}"
+          onchange="updateCCNLPermessi('anni5plus',this.value)" min="0" step="1">
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">ore/anno</div>
+      </div>
+    </div>
+    ${buildCCNLScattiHtml(user, ccnl)}
+  </div>` : ''}`;
+
+  years.forEach(y => {
+    const cfg = getAnnoCfg(user, String(y));
+    html += `
+      <div class="anno-config-card">
+        <div class="anno-config-title">📅 Anno ${y}</div>
+        <div class="config-row">
+          <div class="form-group">
+            <span class="config-label">Giorni Ferie Annui</span>
+            <input type="number" class="config-input" value="${cfg.ferieAnnue||26}"
+              onchange="updateAnnoCfg('${y}','ferieAnnue',this.value)" min="0" step="0.5">
+          </div>
+          ${!isCCNL ? `<div class="form-group">
+            <span class="config-label">Ore Permesso Annui</span>
+            <input type="number" class="config-input" value="${cfg.permessiOreAnnui||100}"
+              onchange="updateAnnoCfg('${y}','permessiOreAnnui',this.value)" min="0" step="1">
+          </div>` : ''}
+        </div>
+        <div style="font-size:10px;color:var(--text3)">
+          Matur./mese: ${+(cfg.ferieAnnue/12).toFixed(2)}gg ferie · ${+getPermessiOrePerMese(user,y,new Date().getMonth()+1).toFixed(2)}h permessi${isCCNL?' (varia con anzianità)':''}
+        </div>
+      </div>`;
+  });
+  html += `<button class="add-year-btn" onclick="addNewYear()">+ Aggiungi Anno</button>`;
+  c.innerHTML = html;
+}
+
+function updateCCNLPermessi(campo, val) {
+  const user = currentUser();
+  if (!user.permessiCCNL) user.permessiCCNL = { anni02: 32, anni24: 68, anni5plus: 104 };
+  user.permessiCCNL[campo] = parseFloat(val) || 0;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('✅ Scaglione permessi aggiornato');
+}
+
+function updateAnnoCfg(year, field, val) {
+  const user = currentUser();
+  if (!user.anni[year]) user.anni[year] = {};
+  user.anni[year][field] = parseFloat(val) || 0;
+  saveDb(); renderAll(); renderSettingsContent();
+}
+
+function saveContractDate() {
+  const input = document.getElementById('contractDateInput');
+  if (input) updateUserContractDate(input.value);
+}
+
+function updateUserContractDate(val) {
+  const user = currentUser();
+  user.dataInizioContratto = val || null;
+  // Assicura che esista la configurazione per l'anno di inizio
+  if (val) {
+    const annoInizio = new Date(val).getFullYear();
+    if (!user.anni) user.anni = {};
+    if (!user.anni[annoInizio]) user.anni[annoInizio] = { ferieAnnue: 26, permessiOreAnnui: 100 };
+  }
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('✅ Data contratto aggiornata');
+}
+
+function addNewYear() {
+  const user  = currentUser();
+  const years = Object.keys(user.anni || {}).map(Number).sort();
+  const next  = years.length ? Math.max(...years) + 1 : viewYear;
+  if (user.anni[next]) { showToast('Anno già presente'); return; }
+  user.anni[next] = { ferieAnnue: 26, permessiOreAnnui: 100 };
+  saveDb(); renderSettingsContent();
+  showToast(`✅ Anno ${next} aggiunto`);
+}
+
+// ═══════════════════════════════════════════════
+//  BACKUP
+// ═══════════════════════════════════════════════
+function openBackupPanel()  { document.getElementById('backupPanel').classList.add('open'); renderBackupStats(); }
+function closeBackupPanel() { document.getElementById('backupPanel').classList.remove('open'); }
+
+function renderBackupStats() {
+  const total = db.users.reduce((n,u) => n + (u.entries||[]).length, 0);
+  document.getElementById('backupStats').innerHTML =
+    `Utenti: <strong>${db.users.length}</strong><br>
+     Voci totali: <strong>${total}</strong><br>
+     Anni configurati: <strong>${db.users.reduce((n,u)=>n+Object.keys(u.anni||{}).length,0)}</strong>`;
+}
+
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `ferie_permessi_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✅ Backup esportato');
+}
+
+function importBackup(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.users) throw new Error();
+      if (!confirm('Importare il backup? I dati attuali verranno sostituiti.')) return;
+      db = data; saveDb(); renderAll(); renderBackupStats();
+      showToast('✅ Backup importato');
+    } catch { showToast('❌ File non valido'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function resetAllData() {
+  if (!confirm('⚠️ Eliminare TUTTI i dati? Operazione irreversibile.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  loadDb(); renderAll(); closeBackupPanel();
+  showToast('🗑 Dati eliminati');
+}
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+
+// ═══════════════════════════════════════════════
+//  CALENDAR RENDER
+// ═══════════════════════════════════════════════
+
+// Build a map: 'YYYY-MM-DD' -> { ferie: bool, permesso: bool, simFerie: bool, simPermesso: bool, entries: [] }
+function buildDayMap(user, year, month, showSim) {
+  // showSim=true: mostra ufficiali+simulate; false: solo ufficiali
+  const map = {};
+  const calcMode = parseFloat(user.calcMode || '1');
+  (user.entries || []).forEach(e => {
+    if (e.anno !== year || e.mese !== month) return;
+    if (!showSim && e.sim) return; // in cal ufficiale, skip simulate
+    // expand date range
+    const d1 = new Date(e.dateFrom);
+    const d2 = new Date(e.dateTo || e.dateFrom);
+    const cur = new Date(d1);
+    while (cur <= d2) {
+      const key = cur.toISOString().slice(0, 10);
+      if (!map[key]) map[key] = { ferie: false, permesso: false, simFerie: false, simPermesso: false, entries: [] };
+      map[key].entries.push(e);
+      if (!e.sim && e.tipo === 'ferie')    map[key].ferie    = true;
+      if (!e.sim && e.tipo === 'permesso') map[key].permesso = true;
+      if (e.sim  && e.tipo === 'ferie')    map[key].simFerie    = true;
+      if (e.sim  && e.tipo === 'permesso') map[key].simPermesso = true;
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+  return map;
+}
+
+function renderCalendar(user, calSimMode) {
+  const container = document.getElementById('calendarContainer');
+  const calcMode = parseFloat(user.calcMode || '1');
+  const simMode = calSimMode || false;
+  const dayMap = buildDayMap(user, viewYear, viewMonth, simMode);
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+
+  // first day of month (0=Sun..6=Sat), adjust to Mon=0
+  const firstDay = new Date(viewYear, viewMonth - 1, 1);
+  const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+  let startDow = firstDay.getDay(); // 0=Sun
+  startDow = (startDow === 0) ? 6 : startDow - 1; // Mon=0..Sun=6
+
+  const DOW = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+  // month summary
+  let ferieGG = 0, permH = 0, simFerieGG = 0, simPermH = 0;
+  Object.values(dayMap).forEach(d => {
+    d.entries.forEach(e => {
+      if (!e.sim && e.tipo === 'ferie')    ferieGG  += e.qty * calcMode;
+      if (!e.sim && e.tipo === 'permesso') permH    += e.qty;
+      if ( e.sim && e.tipo === 'ferie')    simFerieGG += e.qty * calcMode;
+      if ( e.sim && e.tipo === 'permesso') simPermH   += e.qty;
+    });
+  });
+  // deduplicate (each entry counted once not per day)
+  ferieGG = 0; permH = 0; simFerieGG = 0; simPermH = 0;
+  (user.entries || []).filter(e => e.anno === viewYear && e.mese === viewMonth).forEach(e => {
+    if (!e.sim && e.tipo === 'ferie')    ferieGG    += e.qty * calcMode;
+    if (!e.sim && e.tipo === 'permesso') permH      += e.qty;
+    if ( e.sim && e.tipo === 'ferie')    simFerieGG += e.qty * calcMode;
+    if ( e.sim && e.tipo === 'permesso') simPermH   += e.qty;
+  });
+  ferieGG = +ferieGG.toFixed(2);
+  permH   = +permH.toFixed(2);
+  simFerieGG = +simFerieGG.toFixed(2);
+  simPermH   = +simPermH.toFixed(2);
+
+  let html = '<div class="cal-wrap">';
+
+  // Mode label
+  // Summary bar
+  html += `<div class="cal-month-summary">
+    <div class="cal-sum-item"><div class="cal-sum-label">🌴 Ferie</div><div class="cal-sum-val f">${fmt(ferieGG, ' gg')}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">🕐 Permessi</div><div class="cal-sum-val p">${fmt(permH, 'h')}</div></div>
+    ${simFerieGG > 0 || simPermH > 0 ? `
+    <div class="cal-sum-item"><div class="cal-sum-label">🔮 Sim. Ferie</div><div class="cal-sum-val s">${fmt(simFerieGG, ' gg')}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">🔮 Sim. Perm.</div><div class="cal-sum-val s">${fmt(simPermH, 'h')}</div></div>` : ''}
+  </div>`;
+
+  // Legend
+  html += `<div class="cal-legend">
+    <div class="cal-legend-item"><div class="cal-legend-box f"></div> Ferie</div>
+    <div class="cal-legend-item"><div class="cal-legend-box p"></div> Permesso</div>
+    <div class="cal-legend-item"><div class="cal-legend-box fp"></div> Ferie + Permesso</div>
+    <div class="cal-legend-item"><div class="cal-legend-box s"></div> Simulazione</div>
+  </div>`;
+
+  // DOW headers
+  html += '<div class="cal-dow-row">';
+  DOW.forEach((d, i) => {
+    html += `<div class="cal-dow${i >= 5 ? ' weekend' : ''}">${d}</div>`;
+  });
+  html += '</div>';
+
+  // Grid
+  html += '<div class="cal-grid">';
+
+  // empty cells before first day
+  for (let i = 0; i < startDow; i++) {
+    html += '<div class="cal-day empty"></div>';
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${viewYear}-${String(viewMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dow = (startDow + day - 1) % 7; // 0=Mon..6=Sun
+    const isWeekend = dow >= 5;
+    const isToday = dateKey === todayKey;
+    const info = dayMap[dateKey];
+
+    let classes = 'cal-day';
+    if (isWeekend) classes += ' weekend';
+    if (isToday)   classes += ' today';
+
+    let dotHtml = '';
+    let tooltip = '';
+
+    if (info) {
+      if (info.ferie && info.permesso)       { classes += ' has-ferie has-permesso'; dotHtml = '<div class="cal-day-dot f"></div>'; }
+      else if (info.ferie)                   { classes += ' has-ferie'; dotHtml = '<div class="cal-day-dot f"></div>'; }
+      else if (info.permesso)                { classes += ' has-permesso'; dotHtml = '<div class="cal-day-dot p"></div>'; }
+      if (info.simFerie && !info.ferie)      { classes += ' sim-ferie'; dotHtml = '<div class="cal-day-dot s"></div>'; }
+      if (info.simPermesso && !info.permesso){ classes += ' sim-permesso'; dotHtml += '<div class="cal-day-dot s"></div>'; }
+
+      const tips = [...new Set(info.entries.map(e =>
+        (e.sim ? '🔮 ' : '') +
+        (e.tipo === 'ferie' ? `Ferie: ${fmt(e.qty * calcMode, 'gg')}` : `Permesso: ${fmt(e.qty, 'h')}`) +
+        (e.note ? ' — ' + e.note : '')
+      ))];
+      tooltip = tips.join('\n');
+    }
+
+    html += `<div class="${classes}" data-tip="${tooltip.replace(/"/g, '&quot;')}" onmouseenter="showCalTip(event,this)" onmouseleave="hideCalTip()">
+      <span class="cal-day-num">${day}</span>
+      ${dotHtml}
+    </div>`;
+  }
+
+  html += '</div></div>';
+
+  // tooltip el
+  if (!document.getElementById('calTooltip')) {
+    const tt = document.createElement('div');
+    tt.id = 'calTooltip';
+    tt.className = 'cal-tooltip';
+    document.body.appendChild(tt);
+  }
+
+  container.innerHTML = html;
+}
+
+function showCalTip(event, el) {
+  const tip = el.getAttribute('data-tip');
+  if (!tip) return;
+  const tt = document.getElementById('calTooltip');
+  tt.textContent = tip;
+  tt.classList.add('show');
+  const r = el.getBoundingClientRect();
+  tt.style.top  = (r.bottom + 6 + window.scrollY) + 'px';
+  tt.style.left = Math.min(r.left, window.innerWidth - 220) + 'px';
+}
+function hideCalTip() {
+  const tt = document.getElementById('calTooltip');
+  if (tt) tt.classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════
+//  CLOSE ON OVERLAY CLICK
+// ═══════════════════════════════════════════════
+['userPanel','settingsPanel','backupPanel'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+['entryModal','monthPickerModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+loadDb();
+renderAll();
+</script>
+</body>
+</html>
