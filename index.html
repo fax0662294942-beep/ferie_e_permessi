@@ -2203,7 +2203,7 @@ function expandEntryDays(e, user) {
 }
 
 // Conteggio episodi e giorni/ore, obbligate vs richieste, per ferie e permessi separatamente
-function computeObbligateStats(entries) {
+function computeObbligateStats(entries, calcMode) {
   const res = {
     ferie:    { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 },
     permesso: { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 }
@@ -2211,8 +2211,11 @@ function computeObbligateStats(entries) {
   entries.forEach(e => {
     const bucket = res[e.tipo];
     if (!bucket) return;
-    if (e.obbligata) { bucket.obbEp++;  bucket.obbQty  += (e.qty || 0); }
-    else             { bucket.richEp++; bucket.richQty += (e.qty || 0); }
+    // Ferie: valore decurtato reale (qty × calcMode, es. ×1.2 CCNL).
+    // Permessi: nessun moltiplicatore, come nel resto dell'app.
+    const value = e.tipo === 'ferie' ? (e.qty || 0) * calcMode : (e.qty || 0);
+    if (e.obbligata) { bucket.obbEp++;  bucket.obbQty  += value; }
+    else             { bucket.richEp++; bucket.richQty += value; }
   });
   return res;
 }
@@ -2245,7 +2248,8 @@ function pct(part, total) {
 function renderStats(user) {
   const container = document.getElementById('statsContainer');
   const entries = getStatsEntries(user, statsPeriod);
-  const obb = computeObbligateStats(entries);
+  const calcMode = parseFloat(user.calcMode || '1');
+  const obb = computeObbligateStats(entries, calcMode);
   const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory, user);
   const WD = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
   const maxCount = Math.max(1, ...weekdayCounts);
