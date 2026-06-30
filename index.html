@@ -255,7 +255,9 @@
   .entry-icon.p { background: rgba(96,165,250,.12); }
   .entry-icon.s { background: rgba(245,158,11,.12); }
   .entry-body { flex: 1; min-width: 0; }
-  .entry-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .entry-title-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .entry-title-badges { display: flex; gap: 4px; flex-shrink: 0; }
   .entry-sub { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: 'DM Mono', monospace; }
   .entry-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
   .entry-qty { font-size: 15px; font-weight: 700; font-family: 'DM Mono', monospace; }
@@ -887,6 +889,82 @@ const STORAGE_KEY = 'feriePermessi_v3';
 
 let db = { users: [], currentUserId: null };
 
+// ═══════════════════════════════════════════════
+//  GIORNI FESTIVI & CONFIGURAZIONE GIORNI LAVORATIVI
+// ═══════════════════════════════════════════════
+function defaultFestivita() {
+  return [
+    { id: genId(), name: 'Capodanno',               month:1,  day:1,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Epifania',                 month:1,  day:6,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Pasquetta',                easter:true,                    ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Festa della Liberazione',  month:4,  day:25, easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Festa dei Lavoratori',     month:5,  day:1,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Festa della Repubblica',   month:6,  day:2,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Ferragosto',               month:8,  day:15, easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Ognissanti',               month:11, day:1,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Immacolata Concezione',    month:12, day:8,  easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Natale',                   month:12, day:25, easter:false, ricorrente:true, fromYear:null, year:null },
+    { id: genId(), name: 'Santo Stefano',             month:12, day:26, easter:false, ricorrente:true, fromYear:null, year:null }
+  ];
+}
+
+// Algoritmo di Gauss/Meeus per calcolare la data di Pasqua, +1 giorno per Pasquetta
+function computeEasterMonday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l) / 451);
+  const month = Math.floor((h + l - 7*m + 114) / 31);
+  const day = ((h + l - 7*m + 114) % 31) + 1;
+  const easter = new Date(year, month - 1, day);
+  easter.setDate(easter.getDate() + 1); // Lunedì dell'Angelo
+  return easter;
+}
+
+// Inizializza i campi mancanti per utenti creati prima di questa funzionalità
+function ensureWorkdayConfig(user) {
+  if (!user.workdayConfig) user.workdayConfig = { escludiSabato: true, escludiDomenica: true };
+  if (!user.festivita) user.festivita = defaultFestivita();
+}
+
+function isHoliday(user, date) {
+  ensureWorkdayConfig(user);
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate();
+  for (const h of user.festivita) {
+    let hm = h.month, hd = h.day;
+    if (h.easter) {
+      const em = computeEasterMonday(y);
+      hm = em.getMonth() + 1; hd = em.getDate();
+    }
+    if (hm === m && hd === d) {
+      if (h.ricorrente) {
+        if (h.fromYear && y < h.fromYear) continue;
+        return true;
+      } else {
+        if (h.year === y) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isWorkday(user, date) {
+  ensureWorkdayConfig(user);
+  const dow = date.getDay(); // 0=Dom..6=Sab
+  if (user.workdayConfig.escludiSabato   && dow === 6) return false;
+  if (user.workdayConfig.escludiDomenica && dow === 0) return false;
+  if (isHoliday(user, date)) return false;
+  return true;
+}
+
 function loadDb() {
   try { const r = localStorage.getItem(STORAGE_KEY); if (r) db = JSON.parse(r); } catch(e) {}
   if (!db.users || !db.users.length) {
@@ -896,6 +974,8 @@ function loadDb() {
       users: [{
         id: uid, name: 'Utente', calcMode: '1',
         permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
+        workdayConfig: { escludiSabato: true, escludiDomenica: true },
+        festivita: defaultFestivita(),
         anni: {
           [y-1]: { ferieAnnue: 26, permessiOreAnnui: 100 },
           [y]:   { ferieAnnue: 26, permessiOreAnnui: 100 }
@@ -1457,7 +1537,7 @@ function renderEntries(user) {
         <div class="entry-inner">
           <div class="entry-icon ${cls}">${icon}</div>
           <div class="entry-body">
-            <div class="entry-title">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}${badge}${obbBadge}</div>
+            <div class="entry-title"><span class="entry-title-text">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}</span><span class="entry-title-badges">${badge}${obbBadge}</span></div>
             <div class="entry-sub">${dates}</div>
           </div>
           <div class="entry-right">
@@ -1647,11 +1727,11 @@ function autoCalcDays() {
   if (!from || !to) return;
   const d1 = new Date(from), d2 = new Date(to);
   if (d2 < d1) return;
+  const user = currentUser();
   let count = 0;
   const cur = new Date(d1);
   while (cur <= d2) {
-    const dow = cur.getDay();
-    if (dow >= 1 && dow <= 5) count++;
+    if (isWorkday(user, cur)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   document.getElementById('entryQtyFerie').value = count;
@@ -1780,6 +1860,8 @@ function addUser() {
   db.users.push({
     id: uid, name, calcMode, dataInizioContratto: dataInizio,
     permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
+    workdayConfig: { escludiSabato: true, escludiDomenica: true },
+    festivita: defaultFestivita(),
     anni: anniObj,
     entries: []
   });
@@ -1819,10 +1901,12 @@ function buildCCNLScattiHtml(user, ccnl) {
 
 function renderSettingsContent() {
   const user  = currentUser();
+  ensureWorkdayConfig(user);
   const years = Object.keys(user.anni || {}).map(Number).sort();
   const c     = document.getElementById('settingsContent');
   const isCCNL = parseFloat(user.calcMode||'1') === 1.2;
   const ccnl   = user.permessiCCNL || { anni02: 32, anni24: 68, anni5plus: 104 };
+  const wc     = user.workdayConfig;
 
   let html = `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.8">
     Utente: <strong style="color:var(--text)">${user.name}</strong><br>
@@ -1837,6 +1921,51 @@ function renderSettingsContent() {
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:3px">
       Imposta la data di assunzione per il calcolo proporzionale delle maturazioni
+    </div>
+  </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
+    <div class="anno-config-title" style="color:#a78bfa">📆 Giorni Lavorativi & Festività</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      Determina quali giorni vengono esclusi dal calcolo automatico dei giorni di ferie in un intervallo.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+        <input type="checkbox" ${wc.escludiSabato?'checked':''} onchange="toggleWorkdayFlag('escludiSabato',this.checked)" style="width:17px;height:17px;accent-color:#a78bfa;cursor:pointer">
+        Escludi Sabato dal calcolo
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+        <input type="checkbox" ${wc.escludiDomenica?'checked':''} onchange="toggleWorkdayFlag('escludiDomenica',this.checked)" style="width:17px;height:17px;accent-color:#a78bfa;cursor:pointer">
+        Escludi Domenica dal calcolo
+      </label>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;border-top:1px solid var(--border);padding-top:10px">🎌 Giorni Festivi</div>
+    <div id="festivitaList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+      ${(user.festivita||[]).map(h => {
+        const dateLabel = h.easter ? 'Pasquetta (mobile)' : `${String(h.day).padStart(2,'0')}/${String(h.month).padStart(2,'0')}`;
+        const repLabel = h.ricorrente
+          ? (h.fromYear ? `ogni anno dal ${h.fromYear}` : 'ogni anno')
+          : `solo ${h.year}`;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface3);border-radius:8px;padding:6px 10px;font-size:11px">
+          <div><strong style="color:var(--text)">${h.name}</strong> <span style="color:var(--text3)">— ${dateLabel} · ${repLabel}</span></div>
+          <span onclick="deleteFestivita('${h.id}')" style="cursor:pointer;color:var(--danger);padding:2px 6px">🗑</span>
+        </div>`;
+      }).join('') || '<div style="font-size:11px;color:var(--text3)">Nessuna festività configurata</div>'}
+    </div>
+    <div style="background:var(--surface3);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px">
+      <input type="text" class="config-input" id="newFestName" placeholder="Nome festività (es. Santo Patrono)">
+      <div style="display:flex;gap:6px">
+        <input type="number" class="config-input" id="newFestDay" placeholder="Giorno" min="1" max="31" style="flex:1">
+        <select class="config-input" id="newFestMonth" style="flex:1.4">
+          ${MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <select class="config-input" id="newFestRep" onchange="toggleFestYearField()">
+        <option value="always">Si ripete ogni anno</option>
+        <option value="fromYear">Si ripete ogni anno, ma a partire da un anno specifico</option>
+        <option value="once">Solo una volta (un anno specifico)</option>
+      </select>
+      <input type="number" class="config-input" id="newFestYear" placeholder="Anno" style="display:none">
+      <button onclick="addFestivita()" style="padding:8px;background:#a78bfa;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">+ Aggiungi Festività</button>
     </div>
   </div>
   ${isCCNL ? `
@@ -1893,6 +2022,53 @@ function renderSettingsContent() {
   });
   html += `<button class="add-year-btn" onclick="addNewYear()">+ Aggiungi Anno</button>`;
   c.innerHTML = html;
+}
+
+function toggleWorkdayFlag(field, val) {
+  const user = currentUser();
+  ensureWorkdayConfig(user);
+  user.workdayConfig[field] = val;
+  saveDb(); renderAll();
+  showToast('✅ Configurazione aggiornata');
+}
+
+function toggleFestYearField() {
+  const rep = document.getElementById('newFestRep').value;
+  const yearField = document.getElementById('newFestYear');
+  yearField.style.display = (rep === 'once' || rep === 'fromYear') ? '' : 'none';
+  yearField.placeholder = rep === 'once' ? 'Anno (es. 2026)' : 'A partire dall\'anno (es. 2026)';
+}
+
+function addFestivita() {
+  const user = currentUser();
+  ensureWorkdayConfig(user);
+  const name = document.getElementById('newFestName').value.trim();
+  const day  = parseInt(document.getElementById('newFestDay').value);
+  const month = parseInt(document.getElementById('newFestMonth').value);
+  const rep  = document.getElementById('newFestRep').value;
+  const yearVal = parseInt(document.getElementById('newFestYear').value);
+
+  if (!name) { showToast('Inserisci il nome della festività'); return; }
+  if (!day || day < 1 || day > 31) { showToast('Inserisci un giorno valido'); return; }
+  if ((rep === 'once' || rep === 'fromYear') && !yearVal) { showToast('Inserisci l\'anno'); return; }
+
+  const holiday = {
+    id: genId(), name, month, day, easter: false,
+    ricorrente: rep !== 'once',
+    fromYear: rep === 'fromYear' ? yearVal : null,
+    year: rep === 'once' ? yearVal : null
+  };
+  user.festivita.push(holiday);
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('✅ Festività aggiunta');
+}
+
+function deleteFestivita(id) {
+  const user = currentUser();
+  ensureWorkdayConfig(user);
+  user.festivita = user.festivita.filter(h => h.id !== id);
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('🗑 Festività rimossa');
 }
 
 function updateCCNLPermessi(campo, val) {
@@ -2010,9 +2186,9 @@ function getStatsEntries(user, period) {
 }
 
 // Espande una entry nei singoli giorni di calendario coperti.
-// Per le ferie esclude sabato/domenica (giorni effettivamente goduti);
+// Per le ferie esclude weekend/festività secondo la configurazione utente;
 // per i permessi è sempre un solo giorno (dateFrom).
-function expandEntryDays(e) {
+function expandEntryDays(e, user) {
   const days = [];
   if (e.tipo === 'permesso') {
     if (e.dateFrom) days.push(new Date(e.dateFrom + 'T12:00:00'));
@@ -2021,8 +2197,7 @@ function expandEntryDays(e) {
   const from = new Date((e.dateFrom || e.dateTo) + 'T12:00:00');
   const to   = new Date((e.dateTo   || e.dateFrom) + 'T12:00:00');
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const dow = d.getDay(); // 0=Dom..6=Sab
-    if (dow !== 0 && dow !== 6) days.push(new Date(d));
+    if (isWorkday(user, d)) days.push(new Date(d));
   }
   return days;
 }
@@ -2043,13 +2218,13 @@ function computeObbligateStats(entries) {
 }
 
 // Distribuzione per giorno della settimana, con filtri tipo/categoria
-function computeWeekdayStats(entries, typeFilter, categoryFilter) {
+function computeWeekdayStats(entries, typeFilter, categoryFilter, user) {
   const counts = [0,0,0,0,0,0,0]; // Lun..Dom (indice 0=Lun)
   entries.forEach(e => {
     if (typeFilter !== 'tutti' && e.tipo !== typeFilter) return;
     if (categoryFilter === 'obbligate' && !e.obbligata) return;
     if (categoryFilter === 'richieste' && e.obbligata)  return;
-    expandEntryDays(e).forEach(d => {
+    expandEntryDays(e, user).forEach(d => {
       const dow = d.getDay(); // 0=Dom..6=Sab
       const idx = dow === 0 ? 6 : dow - 1; // Lun=0..Dom=6
       counts[idx]++;
@@ -2071,7 +2246,7 @@ function renderStats(user) {
   const container = document.getElementById('statsContainer');
   const entries = getStatsEntries(user, statsPeriod);
   const obb = computeObbligateStats(entries);
-  const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory);
+  const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory, user);
   const WD = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
   const maxCount = Math.max(1, ...weekdayCounts);
 
@@ -2103,22 +2278,23 @@ function renderStats(user) {
         <div style="font-size:11px;color:var(--text3)">Nessuna voce in questo periodo</div>
       </div>`;
     }
-    const obbPctEp  = pct(data.obbEp, totEp);
-    const richPctEp = pct(data.richEp, totEp);
+    // Percentuali calcolate sui GIORNI/ORE (non sugli episodi)
+    const obbPctQty  = pct(data.obbQty, totQty);
+    const richPctQty = pct(data.richQty, totQty);
     return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
       <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;background:var(--surface3)">
-        <div style="width:${obbPctEp};background:var(--accent-sim)"></div>
-        <div style="width:${richPctEp};background:${color}"></div>
+        <div style="width:${obbPctQty};background:var(--accent-sim)"></div>
+        <div style="width:${richPctQty};background:${color}"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-        <span style="color:var(--accent-sim)">🏢 Obbligate: <strong>${data.obbEp}</strong> ep. (${obbPctEp}) · ${fmt(+data.obbQty.toFixed(2), unit)}</span>
+        <span style="color:var(--accent-sim)">🏢 Obbligate: <strong>${fmt(+data.obbQty.toFixed(2), unit)}</strong> (${obbPctQty}) · ${data.obbEp} episodi</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
-        <span style="color:${color}">👤 Richieste: <strong>${data.richEp}</strong> ep. (${richPctEp}) · ${fmt(+data.richQty.toFixed(2), unit)}</span>
+        <span style="color:${color}">👤 Richieste: <strong>${fmt(+data.richQty.toFixed(2), unit)}</strong> (${richPctQty}) · ${data.richEp} episodi</span>
       </div>
       <div style="font-size:10px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
-        Totale: ${totEp} episodi · ${fmt(totQty, unit)}
+        Totale: ${fmt(totQty, unit)} · ${totEp} episodi
       </div>
     </div>`;
   };
