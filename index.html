@@ -100,6 +100,7 @@
   }
   .nav-tab.sim-tab.active { border-color: var(--accent-sim); color: var(--accent-sim); }
   .nav-tab.cal-tab.active { border-color: var(--accent-p); color: var(--accent-p); }
+  .nav-tab.stats-tab.active { border-color: #a78bfa; color: #a78bfa; }
 
   /* ── STICKY TOP ── */
   #stickyTop {
@@ -638,6 +639,7 @@
   <div class="nav-tab active" data-tab="ufficiale" onclick="switchTab('ufficiale')">📋 Piano Ufficiale</div>
   <div class="nav-tab sim-tab" data-tab="simulazione" onclick="switchTab('simulazione')">🔮 Simulazione</div>
   <div class="nav-tab cal-tab" data-tab="calendario" onclick="switchTab('calendario')">📅 Calendario</div>
+  <div class="nav-tab stats-tab" data-tab="statistiche" onclick="switchTab('statistiche')">📊 Statistiche</div>
 </div>
 
 <!-- MONTH NAVIGATOR (sticky) -->
@@ -748,7 +750,7 @@
 <!-- ENTRIES -->
 <div class="entries-container" id="entriesContainer"></div>
 <div id="calendarContainer" style="display:none;padding:0 12px 100px"></div>
-<div id="calendarContainer" style="display:none;padding:0 12px 100px"></div>
+<div id="statsContainer" style="display:none;padding:0 12px 100px"></div>
 
 <!-- ══ MODALI ══ -->
 
@@ -784,6 +786,12 @@
     <div class="form-group">
       <label class="form-label">Note (opzionale)</label>
       <input type="text" class="form-input" id="entryNote" placeholder="Vacanza, visita medica…">
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px;padding:8px 0">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="entryObbligata" style="width:18px;height:18px;accent-color:var(--accent-sim);cursor:pointer">
+        🏢 Chiusura aziendale (obbligata)
+      </label>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEntryModal()">Annulla</button>
@@ -1039,6 +1047,9 @@ let viewMonth = now.getMonth() + 1; // 1..12
 let currentTab = 'ufficiale';
 let entryType  = 'ferie';
 let pickerYear = viewYear;
+let statsPeriod   = 'month'; // 'month' | 'year' | 'total'
+let statsType     = 'tutti'; // 'ferie' | 'permesso' | 'tutti'  (per weekday breakdown)
+let statsCategory = 'tutte'; // 'obbligate' | 'richieste' | 'tutte' (per weekday breakdown)
 
 
 // ═══════════════════════════════════════════════
@@ -1312,7 +1323,7 @@ function renderAll() {
   renderSummary(user);
   renderMonthInfo(user);
   showHideCalendar(user);
-  if (currentTab !== 'calendario') {
+  if (currentTab !== 'calendario' && currentTab !== 'statistiche') {
     renderActionRow();
     renderEntries(user);
   }
@@ -1426,22 +1437,27 @@ function renderEntries(user) {
     const qty = e.tipo === 'ferie' ? fmt(e.qty * calcMode, ' gg') : fmt(e.qty, 'h');
     const readonly = forceReadonly || (!isSim && simMode);
     const badge = (!isSim && simMode) ? '<span style="font-size:9px;background:rgba(255,255,255,.07);color:var(--text3);padding:1px 5px;border-radius:8px;margin-left:4px">ufficiale</span>' : '';
+    const obbBadge = e.obbligata ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">🏢 obbligata</span>' : '';
     let actions = '';
+    const obbToggle = readonly ? '' :
+      `<span class="entry-confirm" style="background:${e.obbligata?'rgba(245,158,11,.25)':'rgba(255,255,255,.06)'};color:${e.obbligata?'var(--accent-sim)':'var(--text3)'};border-color:${e.obbligata?'rgba(245,158,11,.4)':'var(--border)'}" onclick="toggleObbligata('${e.id}')" title="Segna come obbligata/chiusura aziendale">🏢</span>`;
     if (readonly) {
       actions = '<span style="width:20px"></span>';
     } else if (isSim) {
-      // voce simulata: tasto conferma + elimina
-      actions = `<span class="entry-confirm" onclick="confirmSingleEntry('${e.id}')">✅ Conferma</span>`
+      // voce simulata: tasto conferma + obbligata + elimina
+      actions = obbToggle
+              + `<span class="entry-confirm" onclick="confirmSingleEntry('${e.id}')">✅ Conferma</span>`
               + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     } else {
-      actions = `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
+      actions = obbToggle
+              + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     }
     return `
       <div class="entry-card tipo-${cardType}" style="${readonly && simMode ? 'opacity:0.65' : ''}">
         <div class="entry-inner">
           <div class="entry-icon ${cls}">${icon}</div>
           <div class="entry-body">
-            <div class="entry-title">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}${badge}</div>
+            <div class="entry-title">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}${badge}${obbBadge}</div>
             <div class="entry-sub">${dates}</div>
           </div>
           <div class="entry-right">
@@ -1497,12 +1513,16 @@ function switchTab(tab) {
 
 function showHideCalendar(user) {
   const isCalendar = currentTab === 'calendario';
-  document.getElementById('calendarContainer').style.display   = isCalendar ? '' : 'none';
-  document.getElementById('entriesContainer').style.display    = isCalendar ? 'none' : '';
-  document.getElementById('actionRow').style.display           = isCalendar ? 'none' : '';
-  document.getElementById('confirmSimRow').style.display       = isCalendar ? 'none' : 
+  const isStats    = currentTab === 'statistiche';
+  const isSpecial  = isCalendar || isStats;
+  document.getElementById('calendarContainer').style.display = isCalendar ? '' : 'none';
+  document.getElementById('statsContainer').style.display    = isStats ? '' : 'none';
+  document.getElementById('entriesContainer').style.display  = isSpecial ? 'none' : '';
+  document.getElementById('actionRow').style.display         = isSpecial ? 'none' : '';
+  document.getElementById('confirmSimRow').style.display     = isSpecial ? 'none' :
     (currentTab === 'simulazione' ? '' : 'none');
   if (isCalendar) renderCalendar(user, true); // mostra sempre ufficiali + simulate
+  if (isStats)    renderStats(user);
 }
 
 // ═══════════════════════════════════════════════
@@ -1604,6 +1624,7 @@ function openEntryModal(tipo) {
   document.getElementById('entryQtyFerie').value   = '';
   document.getElementById('entryQtyOre').value     = '';
   document.getElementById('entryNote').value       = '';
+  document.getElementById('entryObbligata').checked = false;
 
   // mostra i campi data corretti in base al tipo
   document.getElementById('dateRowFerie').style.display    = (tipo === 'ferie')    ? '' : 'none';
@@ -1663,8 +1684,10 @@ function saveEntry() {
   const anno = d.getFullYear();
   const mese = d.getMonth() + 1;
 
+  const obbligata = document.getElementById('entryObbligata').checked;
+
   if (!user.entries) user.entries = [];
-  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode });
+  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode, obbligata });
   saveDb();
   closeEntryModal();
   // aggiorna vista al mese dell'entry inserita
@@ -1679,6 +1702,15 @@ function deleteEntry(id) {
   saveDb();
   renderAll();
   showToast('🗑 Voce eliminata');
+}
+
+function toggleObbligata(id) {
+  const user = currentUser();
+  const e = (user.entries || []).find(e => e.id === id);
+  if (!e) return;
+  e.obbligata = !e.obbligata;
+  saveDb(); renderAll();
+  showToast(e.obbligata ? '🏢 Segnata come obbligata' : '👤 Segnata come richiesta');
 }
 
 function confirmSingleEntry(id) {
@@ -1964,6 +1996,175 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+
+// ═══════════════════════════════════════════════
+//  STATISTICHE
+// ═══════════════════════════════════════════════
+
+// Filtra le entries (sempre ufficiali, mai simulate) in base al periodo scelto
+function getStatsEntries(user, period) {
+  const all = (user.entries || []).filter(e => !e.sim);
+  if (period === 'month') return all.filter(e => e.anno === viewYear && e.mese === viewMonth);
+  if (period === 'year')  return all.filter(e => e.anno === viewYear);
+  return all; // 'total'
+}
+
+// Espande una entry nei singoli giorni di calendario coperti.
+// Per le ferie esclude sabato/domenica (giorni effettivamente goduti);
+// per i permessi è sempre un solo giorno (dateFrom).
+function expandEntryDays(e) {
+  const days = [];
+  if (e.tipo === 'permesso') {
+    if (e.dateFrom) days.push(new Date(e.dateFrom + 'T12:00:00'));
+    return days;
+  }
+  const from = new Date((e.dateFrom || e.dateTo) + 'T12:00:00');
+  const to   = new Date((e.dateTo   || e.dateFrom) + 'T12:00:00');
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay(); // 0=Dom..6=Sab
+    if (dow !== 0 && dow !== 6) days.push(new Date(d));
+  }
+  return days;
+}
+
+// Conteggio episodi e giorni/ore, obbligate vs richieste, per ferie e permessi separatamente
+function computeObbligateStats(entries) {
+  const res = {
+    ferie:    { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 },
+    permesso: { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 }
+  };
+  entries.forEach(e => {
+    const bucket = res[e.tipo];
+    if (!bucket) return;
+    if (e.obbligata) { bucket.obbEp++;  bucket.obbQty  += (e.qty || 0); }
+    else             { bucket.richEp++; bucket.richQty += (e.qty || 0); }
+  });
+  return res;
+}
+
+// Distribuzione per giorno della settimana, con filtri tipo/categoria
+function computeWeekdayStats(entries, typeFilter, categoryFilter) {
+  const counts = [0,0,0,0,0,0,0]; // Lun..Dom (indice 0=Lun)
+  entries.forEach(e => {
+    if (typeFilter !== 'tutti' && e.tipo !== typeFilter) return;
+    if (categoryFilter === 'obbligate' && !e.obbligata) return;
+    if (categoryFilter === 'richieste' && e.obbligata)  return;
+    expandEntryDays(e).forEach(d => {
+      const dow = d.getDay(); // 0=Dom..6=Sab
+      const idx = dow === 0 ? 6 : dow - 1; // Lun=0..Dom=6
+      counts[idx]++;
+    });
+  });
+  return counts;
+}
+
+function setStatsPeriod(p) { statsPeriod = p; renderStats(currentUser()); }
+function setStatsType(t)   { statsType = t;   renderStats(currentUser()); }
+function setStatsCategory(c) { statsCategory = c; renderStats(currentUser()); }
+
+function pct(part, total) {
+  if (!total) return '0%';
+  return Math.round(part / total * 100) + '%';
+}
+
+function renderStats(user) {
+  const container = document.getElementById('statsContainer');
+  const entries = getStatsEntries(user, statsPeriod);
+  const obb = computeObbligateStats(entries);
+  const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory);
+  const WD = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const maxCount = Math.max(1, ...weekdayCounts);
+
+  const periodLabel = statsPeriod === 'month'
+    ? MONTHS[viewMonth-1] + ' ' + viewYear
+    : statsPeriod === 'year' ? 'Anno ' + viewYear : 'Storico completo';
+
+  const pillBtn = (active, label, onclick) =>
+    `<button onclick="${onclick}" style="padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid ${active?'#a78bfa':'var(--border)'};background:${active?'rgba(167,139,250,.15)':'transparent'};color:${active?'#a78bfa':'var(--text3)'};cursor:pointer;white-space:nowrap">${label}</button>`;
+
+  let html = `
+  <div style="margin-top:14px">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px">📊 Statistiche — ${periodLabel}</div>
+
+    <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px">
+      ${pillBtn(statsPeriod==='month', '📅 Mese', "setStatsPeriod('month')")}
+      ${pillBtn(statsPeriod==='year',  '📆 Anno', "setStatsPeriod('year')")}
+      ${pillBtn(statsPeriod==='total', '🗂️ Totale', "setStatsPeriod('total')")}
+    </div>
+  </div>`;
+
+  // ── Sezione Obbligate vs Richieste ──
+  const renderTypeBlock = (label, icon, color, data, unit) => {
+    const totEp  = data.obbEp + data.richEp;
+    const totQty = +(data.obbQty + data.richQty).toFixed(2);
+    if (totEp === 0) {
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:4px">${icon} ${label}</div>
+        <div style="font-size:11px;color:var(--text3)">Nessuna voce in questo periodo</div>
+      </div>`;
+    }
+    const obbPctEp  = pct(data.obbEp, totEp);
+    const richPctEp = pct(data.richEp, totEp);
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;background:var(--surface3)">
+        <div style="width:${obbPctEp};background:var(--accent-sim)"></div>
+        <div style="width:${richPctEp};background:${color}"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
+        <span style="color:var(--accent-sim)">🏢 Obbligate: <strong>${data.obbEp}</strong> ep. (${obbPctEp}) · ${fmt(+data.obbQty.toFixed(2), unit)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
+        <span style="color:${color}">👤 Richieste: <strong>${data.richEp}</strong> ep. (${richPctEp}) · ${fmt(+data.richQty.toFixed(2), unit)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
+        Totale: ${totEp} episodi · ${fmt(totQty, unit)}
+      </div>
+    </div>`;
+  };
+
+  html += renderTypeBlock('Ferie', '🌴', 'var(--accent-f)', obb.ferie, ' gg');
+  html += renderTypeBlock('Permessi', '🕐', 'var(--accent-p)', obb.permesso, 'h');
+
+  // ── Sezione Distribuzione giorni della settimana ──
+  html += `
+  <div style="margin-top:18px">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px">📆 Distribuzione Giorni Settimana</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      ${pillBtn(statsType==='tutti',    'Ferie+Permessi', "setStatsType('tutti')")}
+      ${pillBtn(statsType==='ferie',    '🌴 Ferie',        "setStatsType('ferie')")}
+      ${pillBtn(statsType==='permesso', '🕐 Permessi',     "setStatsType('permesso')")}
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      ${pillBtn(statsCategory==='tutte',     'Tutte',     "setStatsCategory('tutte')")}
+      ${pillBtn(statsCategory==='obbligate', '🏢 Obbligate', "setStatsCategory('obbligate')")}
+      ${pillBtn(statsCategory==='richieste', '👤 Richieste', "setStatsCategory('richieste')")}
+    </div>
+  </div>
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 14px 4px;margin-bottom:24px">`;
+
+  const totalDays = weekdayCounts.reduce((a,b) => a+b, 0);
+  if (totalDays === 0) {
+    html += `<div style="font-size:11px;color:var(--text3);padding-bottom:10px">Nessun giorno in questo periodo con i filtri selezionati</div>`;
+  } else {
+    WD.forEach((label, i) => {
+      const count = weekdayCounts[i];
+      const barPct = Math.round(count / maxCount * 100);
+      html += `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
+          <span>${label}</span><span style="font-family:'DM Mono',monospace;font-weight:700">${count}</span>
+        </div>
+        <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="width:${barPct}%;height:100%;background:#a78bfa;border-radius:3px"></div>
+        </div>
+      </div>`;
+    });
+    html += `<div style="font-size:10px;color:var(--text3);padding:4px 0 10px">Totale giorni conteggiati: ${totalDays}</div>`;
+  }
+  html += `</div>`;
+
+  container.innerHTML = html;
+}
 
 // ═══════════════════════════════════════════════
 //  CALENDAR RENDER
