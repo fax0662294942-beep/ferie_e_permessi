@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ferie-permessi-v22';
+const CACHE_NAME = 'ferie-permessi-v14';
 const ASSETS = [
   'index.html',
   'manifest.json',
@@ -24,6 +24,6 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });

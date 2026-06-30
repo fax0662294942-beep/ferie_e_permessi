@@ -2,8 +2,15 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ferie & P.">
+<meta name="theme-color" content="#1a1d27">
 <title>Ferie & Permessi</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192x192.png">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
@@ -575,6 +582,38 @@
   .cal-sum-val.s { color: var(--accent-sim); }
 
 </style>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+    getRedirectResult, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDue3aMzi-8-zflMvlgdGp1TzzId1CZNaI",
+    authDomain: "viaggi-camper.firebaseapp.com",
+    projectId: "viaggi-camper",
+    storageBucket: "viaggi-camper.firebasestorage.app",
+    messagingSenderId: "172431561795",
+    appId: "1:172431561795:web:ae6ef3e9c2bbdfeb2d70f6"
+  };
+
+  const fbApp  = initializeApp(firebaseConfig);
+  const fbAuth = getAuth(fbApp);
+  const fbDb   = getFirestore(fbApp);
+  const fbProvider = new GoogleAuthProvider();
+
+  window.firebaseAuth = fbAuth;
+  window.firebaseDB   = fbDb;
+  window.firebaseAuthMethods = { signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, GoogleAuthProvider };
+  window.firestoreMethods    = { doc, getDoc, setDoc, onSnapshot, serverTimestamp };
+  window.fbProvider = fbProvider;
+
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
 </head>
 <body>
 
@@ -584,10 +623,13 @@
   <div class="header-right">
     <button class="icon-btn" onclick="openSettingsPanel()" title="Impostazioni">⚙️</button>
     <button class="icon-btn" onclick="openBackupPanel()" title="Backup">💾</button>
+    <button class="icon-btn" id="cloudSyncBtn" onclick="manualSync()" title="Sincronizza" style="display:none">☁️</button>
+    <button class="icon-btn" id="loginBtn" onclick="doGoogleLogin()" title="Accedi con Google">🔑</button>
     <div class="user-chip" onclick="openUserPanel()">
       <div class="user-avatar" id="headerAvatar">?</div>
       <span id="headerUserName">Utente</span>
     </div>
+    <button class="icon-btn" id="logoutBtn" onclick="doLogout()" title="Esci" style="display:none">🚪</button>
   </div>
 </header>
 
@@ -615,7 +657,7 @@
   <div class="summary-section ferie">
     <div class="section-title ferie">🌴 Ferie</div>
     <div class="year-block">
-      <div class="year-block-label">Anno Prec. (<span id="prevYearLabelF">—</span>)</div>
+      <div class="year-block-label">Saldo Anni Precedenti</div>
       <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value green" id="fpMat">—</span></div>
       <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="fpUsed">—</span></div>
       <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="fpRes">—</span></div>
@@ -631,7 +673,7 @@
   <div class="summary-section permessi">
     <div class="section-title permessi">🕐 Permessi</div>
     <div class="year-block">
-      <div class="year-block-label">Anno Prec. (<span id="prevYearLabelP">—</span>)</div>
+      <div class="year-block-label">Saldo Anni Precedenti</div>
       <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="ppMat">—</span></div>
       <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="ppUsed">—</span></div>
       <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
@@ -859,7 +901,127 @@ function loadDb() {
   if (!db.currentUserId) db.currentUserId = db.users[0].id;
 }
 
-function saveDb() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+function saveDb() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  if (fbUser) {
+    clearTimeout(saveDbDebounce);
+    saveDbDebounce = setTimeout(() => { pushDbToFirestore(); }, 800);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  FIREBASE SYNC (Google Sign-In + Firestore)
+// ═══════════════════════════════════════════════
+let fbUser = null;
+let fbUnsubscribe = null;
+let fbSavePending = false;
+let saveDbDebounce = null;
+
+function getFbDocRef() {
+  if (!fbUser || !window.firestoreMethods) return null;
+  return window.firestoreMethods.doc(window.firebaseDB, 'feriePermessi_data', fbUser.uid);
+}
+
+async function doGoogleLogin() {
+  if (!window.firebaseAuthMethods) { showToast('⏳ Servizio non pronto, riprova tra poco'); return; }
+  const { signInWithPopup, signInWithRedirect } = window.firebaseAuthMethods;
+  try {
+    await signInWithPopup(window.firebaseAuth, window.fbProvider);
+  } catch (e) {
+    try { await signInWithRedirect(window.firebaseAuth, window.fbProvider); }
+    catch (e2) { showToast('❌ Errore login: ' + (e2.message || e2)); }
+  }
+}
+
+async function doLogout() {
+  if (!confirm('Disconnettersi da Google? I dati restano salvati su questo dispositivo.')) return;
+  if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe = null; }
+  await window.firebaseAuthMethods.signOut(window.firebaseAuth);
+  showToast('👋 Disconnesso');
+}
+
+async function manualSync() {
+  if (!fbUser) { showToast('Accedi prima con Google'); return; }
+  await pushDbToFirestore();
+  showToast('☁️ Sincronizzato su cloud');
+}
+
+async function pushDbToFirestore() {
+  const ref = getFbDocRef();
+  if (!ref) return;
+  const { setDoc, serverTimestamp } = window.firestoreMethods;
+  fbSavePending = true;
+  try {
+    await setDoc(ref, {
+      users: db.users,
+      currentUserId: db.currentUserId,
+      lastModified: serverTimestamp()
+    });
+  } catch (e) { console.error('Errore salvataggio Firestore', e); }
+  setTimeout(() => { fbSavePending = false; }, 1500);
+}
+
+function startFirestoreListener() {
+  const ref = getFbDocRef();
+  if (!ref) return;
+  const { onSnapshot } = window.firestoreMethods;
+  fbUnsubscribe = onSnapshot(ref, snap => {
+    if (fbSavePending) return; // ignora l'eco del proprio salvataggio
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.users && data.users.length) {
+        db = { users: data.users, currentUserId: data.currentUserId || data.users[0].id };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        renderAll();
+        renderUserList();
+      }
+    }
+  }, err => console.error('Errore listener Firestore', err));
+}
+
+async function initFirestoreSync(user) {
+  fbUser = user;
+  document.getElementById('loginBtn').style.display  = 'none';
+  document.getElementById('logoutBtn').style.display = '';
+  document.getElementById('cloudSyncBtn').style.display = '';
+
+  const ref = getFbDocRef();
+  const { getDoc } = window.firestoreMethods;
+  try {
+    const snap = await getDoc(ref);
+    if (snap.exists() && snap.data().users && snap.data().users.length) {
+      const data = snap.data();
+      db = { users: data.users, currentUserId: data.currentUserId || data.users[0].id };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      showToast('☁️ Dati caricati da cloud');
+    } else {
+      await pushDbToFirestore();
+      showToast('☁️ Dati locali migrati su cloud');
+    }
+  } catch (e) { console.error('Errore lettura Firestore', e); }
+
+  renderAll();
+  startFirestoreListener();
+}
+
+function setupFirebaseAuthListener() {
+  if (!window.firebaseAuthMethods) {
+    window.addEventListener('firebase-ready', setupFirebaseAuthListener, { once: true });
+    return;
+  }
+  const { onAuthStateChanged } = window.firebaseAuthMethods;
+  onAuthStateChanged(window.firebaseAuth, async user => {
+    if (user) {
+      await initFirestoreSync(user);
+    } else {
+      fbUser = null;
+      if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe = null; }
+      document.getElementById('loginBtn').style.display  = '';
+      document.getElementById('logoutBtn').style.display = 'none';
+      document.getElementById('cloudSyncBtn').style.display = 'none';
+    }
+  });
+}
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function currentUser() { return db.users.find(u => u.id === db.currentUserId) || db.users[0]; }
 function getAnnoCfg(user, year) {
@@ -996,53 +1158,79 @@ function getYearUsed(user, year, simMode) {
 }
 
 /*
- * LOGICA SCALATURA:
- * Le ferie/permessi usate nell'anno corrente scalano prima dai residui
- * dell'anno precedente, poi dall'anno corrente.
+ * RESIDUO ANNI PRECEDENTI (cumulativo multi-anno)
+ * Risale da startYear (primo anno tracciato) fino a year-1, sommando
+ * iterativamente maturazione - utilizzo di ciascun anno, con floor a 0
+ * ad ogni passaggio d'anno (il debito non si trascina, viene assorbito).
+ * Usa SEMPRE e solo voci ufficiali (mai simulate) per la storia pregressa.
+ */
+function getResiduoAnniPrecedenti(user, year) {
+  // Considera SOLO gli anni esplicitamente configurati dall'utente in user.anni
+  // (NON la data di assunzione: quella serve solo per il calcolo mensile interno
+  // all'anno, non per ricostruire storico fittizio su anni mai tracciati in app)
+  const years = Object.keys(user.anni || {}).map(Number).filter(y => y < year);
+  if (!years.length) return { ferie: 0, permessi: 0 };
+  const startYear = Math.min(...years);
+
+  let residuoFerie = 0, residuoPerm = 0;
+  for (let y = startYear; y < year; y++) {
+    const mat  = getAnnualMat(user, y);
+    const used = getYearUsed(user, y, false); // solo ufficiali, storia consolidata
+    residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
+    residuoPerm  = Math.max(0, +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2));
+  }
+  return { ferie: residuoFerie, permessi: residuoPerm };
+}
+
+/*
+ * LOGICA SCALATURA (FIFO):
+ * Le voci dell'anno corrente scalano PRIMA dal saldo anni precedenti
+ * (cumulativo, multi-anno), poi dalla maturazione dell'anno corrente.
+ * Tutto in unità "effettive" (×calcMode per le ferie, coerenti con Maturate).
  *
- * Residuo anno prec = mat_prec - used_prec_effettivo
- * used_corrente_da_prec = min(used_corrente, residuo_prec)  [≥0]
- * used_corrente_da_curr = used_corrente - used_corrente_da_prec
+ * Box ROSSO "Saldo Anni Precedenti":
+ *   Maturate = residuo cumulativo congelato al 1/1 dell'anno corrente
+ *   Utilizzate = quota di quel residuo consumata da voci anno corrente
+ *   Residue = Maturate - Utilizzate (mai sotto zero)
  *
- * Residuo anno prec netto = residuo_prec - used_corrente_da_prec
- * Residuo anno corr       = mat_corr - used_corrente_da_curr
+ * Box BLU "Anno Corrente":
+ *   Maturate = accrual proprio dell'anno
+ *   Utilizzate = eccedenza che supera il saldo anni precedenti
+ *   Residue = Maturate - Utilizzate (PUÒ andare sotto zero, è un anticipo)
  */
 function getYearTotals(user, year, simMode) {
-  const mat      = getAnnualMat(user, year);
-  const used     = getYearUsed(user, year, simMode);
-  const calcMode = parseFloat(user.calcMode || '1');
+  const mat  = getAnnualMat(user, year);
+  const used = getYearUsed(user, year, simMode); // rispetta simMode (sim entries anno corrente)
 
-  // Residuo puro anno precedente in RAW — sempre solo voci ufficiali (no sim)
-  const prevMat  = getAnnualMat(user, year - 1);
-  const prevUsed = getYearUsed(user, year - 1, false);
-  const prevResRawF = Math.max(0, +(prevMat.ferie    - prevUsed.ferieRaw).toFixed(2));
-  const prevResP    = Math.max(0, +(prevMat.permessi - prevUsed.permUsed).toFixed(2));
+  // Saldo anni precedenti: cumulativo multi-anno, sempre solo storia ufficiale
+  const prevRes = getResiduoAnniPrecedenti(user, year);
 
-  // Quanto del residuo prec viene consumato dalle voci anno corrente (in RAW)
-  const consumedPrevRawF = +Math.min(used.ferieRaw, prevResRawF).toFixed(2);
-  const consumedPrevP    = +Math.min(used.permUsed, prevResP).toFixed(2);
+  // Quanto del saldo anni prec. viene consumato dalle voci dell'anno corrente
+  const consumedPrevF = +Math.min(used.ferieUsed, prevRes.ferie).toFixed(2);
+  const consumedPrevP = +Math.min(used.permUsed,  prevRes.permessi).toFixed(2);
 
-  // Residuo netto anno prec = residuo prec - quanto scalato dall'anno corrente
-  const prevResNetRawF = +(prevResRawF - consumedPrevRawF).toFixed(2);
-  const prevResNetP    = +(prevResP    - consumedPrevP).toFixed(2);
+  const prevResNetF = +(prevRes.ferie    - consumedPrevF).toFixed(2);
+  const prevResNetP = +(prevRes.permessi - consumedPrevP).toFixed(2);
 
-  // Residuo anno corrente = maturate - TUTTO usato nell'anno corrente (raw)
-  // Il ×1.2 NON riduce il contatore raw: 14gg inseriti = 14gg scalati dalle maturate
-  const currResRawF = +(mat.ferie    - used.ferieRaw).toFixed(2);
-  const currResP    = +(mat.permessi - used.permUsed).toFixed(2);
+  // Eccedenza che intacca l'anno corrente
+  const usedCurrF = +(used.ferieUsed - consumedPrevF).toFixed(2);
+  const usedCurrP = +(used.permUsed  - consumedPrevP).toFixed(2);
+
+  const currResF = +(mat.ferie    - usedCurrF).toFixed(2); // può essere negativo
+  const currResP = +(mat.permessi - usedCurrP).toFixed(2); // può essere negativo
 
   return {
-    prevFerieMat:  prevMat.ferie,
-    prevFerieUsed: prevUsed.ferieUsed,
-    prevFerieRes:  +(prevResNetRawF * calcMode).toFixed(2),
-    prevPermMat:   prevMat.permessi,
-    prevPermUsed:  prevUsed.permUsed,
+    prevFerieMat:  prevRes.ferie,
+    prevFerieUsed: consumedPrevF,
+    prevFerieRes:  prevResNetF,
+    prevPermMat:   prevRes.permessi,
+    prevPermUsed:  consumedPrevP,
     prevPermRes:   prevResNetP,
     ferieMat:      mat.ferie,
-    ferieUsed:     used.ferieUsed,
-    ferieRes:      +(currResRawF * calcMode).toFixed(2),
+    ferieUsed:     usedCurrF,
+    ferieRes:      currResF,
     permessiMat:   mat.permessi,
-    permessiUsed:  used.permUsed,
+    permessiUsed:  usedCurrP,
     permessiRes:   currResP
   };
 }
@@ -1069,44 +1257,39 @@ function getMonthUsed(user, year, month, simMode) {
 }
 
 /*
- * Saldo progressivo a inizio e fine mese.
- * Tutto il calcolo avviene in giorni RAW (senza ×calcMode),
- * e solo al momento del display si converte in effettivi.
+ * Saldo progressivo mensile: libro mastro continuo.
+ * saldoInizioMese(M) = saldoFineMese(M-1) + maturazione(M)
+ *   per M=1: saldoFineMese(dicembre anno-1) = Saldo Anni Precedenti
+ * saldoFineMese(M) = saldoInizioMese(M) - utilizzato(M)
+ * Tutto in unità effettive (coerente col box Anno Corrente).
  */
 function getMonthSaldo(user, year, month, simMode) {
-  const calcMode = parseFloat(user.calcMode || '1');
+  // Base di partenza: saldo anni precedenti cumulativo
+  const prevRes = getResiduoAnniPrecedenti(user, year);
 
-  // Residuo puro anno precedente in RAW — sempre solo voci ufficiali (no sim)
-  const prevMat  = getAnnualMat(user, year - 1);
-  const prevUsed = getYearUsed(user, year - 1, false);
-  const residuoPrevF = Math.max(0, +(prevMat.ferie    - prevUsed.ferieRaw).toFixed(2));
-  const residuoPrevP = Math.max(0, +(prevMat.permessi - prevUsed.permUsed).toFixed(2));
-
-  // Accumula mesi 1..month-1 in RAW
-  let matCumF = 0, matCumP = 0, usedCumRawF = 0, usedCumP = 0;
+  // Accumula da gennaio fino al mese precedente (per ottenere saldoFine(month-1))
+  let saldoF = prevRes.ferie;
+  let saldoP = prevRes.permessi;
   for (let m = 1; m < month; m++) {
     const mm = getMonthMat(user, year, m);
     const mu = getMonthUsed(user, year, m, simMode);
-    matCumF    += mm.ferie;
-    matCumP    += mm.permessi;
-    usedCumRawF += mu.ferieRaw;
-    usedCumP   += mu.permUsed;
+    saldoF = +(saldoF + mm.ferie    - mu.ferieUsed).toFixed(2);
+    saldoP = +(saldoP + mm.permessi - mu.permUsed).toFixed(2);
   }
-  // Saldo inizio mese in RAW, poi converti in eff per display
-  const saldoInizioRawF = +(residuoPrevF + matCumF - usedCumRawF).toFixed(2);
-  const saldoInizioP    = +(residuoPrevP + matCumP - usedCumP).toFixed(2);
+  // saldoF/saldoP ora = saldoFineMese(month-1) (= prevRes se month==1)
 
-  // Saldo fine mese
   const thisMat  = getMonthMat(user, year, month);
   const thisUsed = getMonthUsed(user, year, month, simMode);
-  const saldoFineRawF = +(saldoInizioRawF + thisMat.ferie    - thisUsed.ferieRaw).toFixed(2);
-  const saldoFineP    = +(saldoInizioP    + thisMat.permessi - thisUsed.permUsed).toFixed(2);
+
+  const saldoInizioF = +(saldoF + thisMat.ferie).toFixed(2);
+  const saldoInizioP = +(saldoP + thisMat.permessi).toFixed(2);
+
+  const saldoFineF = +(saldoInizioF - thisUsed.ferieUsed).toFixed(2);
+  const saldoFineP = +(saldoInizioP - thisUsed.permUsed).toFixed(2);
 
   return {
-    saldoInizioF: +(saldoInizioRawF * calcMode).toFixed(2),
-    saldoInizioP,
-    saldoFineF:   +(saldoFineRawF * calcMode).toFixed(2),
-    saldoFineP
+    saldoInizioF, saldoInizioP,
+    saldoFineF,   saldoFineP
   };
 }
 
@@ -1152,8 +1335,6 @@ function renderSummary(user) {
   const t = getYearTotals(user, viewYear, simMode);
   const calcLabel = parseFloat(user.calcMode||'1') === 1.2 ? ' (×1.2)' : '';
 
-  document.getElementById('prevYearLabelF').textContent = viewYear - 1;
-  document.getElementById('prevYearLabelP').textContent = viewYear - 1;
   document.getElementById('currYearLabelF').textContent = viewYear;
   document.getElementById('currYearLabelP').textContent = viewYear;
 
@@ -1970,6 +2151,14 @@ function hideCalTip() {
 // ═══════════════════════════════════════════════
 loadDb();
 renderAll();
+setupFirebaseAuthListener();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
