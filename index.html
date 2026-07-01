@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Ferie & P.">
+<meta name="apple-mobile-web-app-title" content="Ferie &amp; P.">
 <meta name="theme-color" content="#1a1d27">
 <title>Ferie & Permessi</title>
 <link rel="manifest" href="manifest.json">
@@ -679,14 +679,16 @@
     <div class="year-block">
       <div class="year-block-label">Saldo Anni Precedenti</div>
       <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="ppMat">—</span></div>
-      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="ppUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Godute</span><span class="stat-value red" id="ppUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Pagate</span><span class="stat-value" style="color:var(--accent-sim)" id="ppPagate">—</span></div>
       <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
     </div>
     <div class="year-divider"></div>
     <div class="year-block">
       <div class="year-block-label">Anno Corr. (<span id="currYearLabelP">—</span>)</div>
       <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="pcMat">—</span></div>
-      <div class="stat-row"><span class="stat-label">Utilizzate</span><span class="stat-value red" id="pcUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Godute</span><span class="stat-value red" id="pcUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Pagate</span><span class="stat-value" style="color:var(--accent-sim)" id="pcPagate">—</span></div>
       <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="pcRes">—</span></div>
     </div>
   </div>
@@ -725,8 +727,20 @@
     </div>
     <div class="month-mat-divider"></div>
     <div class="month-mat-item">
-      <span class="month-mat-label">Permessi utilizzati mese</span>
+      <span class="month-mat-label">Permessi goduti mese</span>
       <span class="month-mat-value" style="color:var(--danger)" id="mUsatePerm">—</span>
+    </div>
+  </div>
+  <div style="height:1px;background:var(--border);width:100%"></div>
+  <div style="display:flex;gap:0;width:100%">
+    <div class="month-mat-item">
+      <span class="month-mat-label">—</span>
+      <span class="month-mat-value" style="color:transparent">—</span>
+    </div>
+    <div class="month-mat-divider"></div>
+    <div class="month-mat-item">
+      <span class="month-mat-label">Permessi pagati mese</span>
+      <span class="month-mat-value" style="color:var(--accent-sim)" id="mPagatiPerm">—</span>
     </div>
   </div>
   <div style="height:1px;background:var(--border);width:100%"></div>
@@ -755,6 +769,44 @@
 <div id="statsContainer" style="display:none;padding:0 12px 100px"></div>
 
 <!-- ══ MODALI ══ -->
+
+<!-- MODALE LIQUIDA PERMESSI -->
+<div class="modal-overlay" id="liquidaModal">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--accent-sim)">💰 Liquida Permessi</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;line-height:1.6">
+      Registra le ore di permesso liquidate in busta paga.<br>
+      Vengono scalate dal saldo disponibile ma non conteggiate come "godute".
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mese di liquidazione</label>
+      <div style="display:flex;gap:6px">
+        <select class="form-input" id="liquidaMese" style="flex:1.5">
+          <option value="1">Gennaio</option><option value="2">Febbraio</option>
+          <option value="3">Marzo</option><option value="4">Aprile</option>
+          <option value="5">Maggio</option><option value="6">Giugno</option>
+          <option value="7">Luglio</option><option value="8">Agosto</option>
+          <option value="9">Settembre</option><option value="10">Ottobre</option>
+          <option value="11">Novembre</option><option value="12">Dicembre</option>
+        </select>
+        <input type="number" class="form-input" id="liquidaAnno" style="flex:1" min="2020" max="2099">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ore liquidate</label>
+      <input type="number" class="form-input" id="liquidaQty" min="0.5" step="0.5" placeholder="es. 18.5">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px" id="liquidaHint"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (opzionale)</label>
+      <input type="text" class="form-input" id="liquidaNota" placeholder="es. Liquidazione permessi residui">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeLiquidaModal()">Annulla</button>
+      <button class="btn-confirm" onclick="saveLiquidazione()" style="background:var(--accent-sim);color:#000">💰 Conferma</button>
+    </div>
+  </div>
+</div>
 
 <!-- Entry Modal -->
 <div class="modal-overlay" id="entryModal">
@@ -1228,23 +1280,29 @@ function getMonthMat(user, year, month) {
 
 // Totale utilizzate in un anno (solo uff, o uff+sim)
 // Restituisce sia il valore raw (giorni inseriti) sia quello effettivo (×calcMode per ferie)
+// permGoduti = ore effettivamente godute come permesso
+// permPagati = ore liquidate in busta paga (tipo 'permesso_pagato')
+// permConsumed = goduti + pagati (usato per il calcolo del residuo)
 function getYearUsed(user, year, simMode) {
   const calcMode = parseFloat(user.calcMode || '1');
   const entries = (user.entries || []).filter(e =>
     e.anno === year && (simMode ? true : !e.sim)
   );
-  let ferieRaw = 0, ferieEff = 0, permUsed = 0;
+  let ferieRaw = 0, ferieEff = 0, permGoduti = 0, permPagati = 0;
   entries.forEach(e => {
     if (e.tipo === 'ferie') {
       ferieRaw += (e.qty || 0);
       ferieEff += (e.qty || 0) * calcMode;
     }
-    if (e.tipo === 'permesso') permUsed += (e.qty || 0);
+    if (e.tipo === 'permesso')        permGoduti += (e.qty || 0);
+    if (e.tipo === 'permesso_pagato') permPagati += (e.qty || 0);
   });
   return {
-    ferieRaw:  +ferieRaw.toFixed(2),   // giorni inseriti senza moltiplicatore
-    ferieUsed: +ferieEff.toFixed(2),   // giorni effettivi (×calcMode) — per display
-    permUsed:  +permUsed.toFixed(2)
+    ferieRaw:      +ferieRaw.toFixed(2),
+    ferieUsed:     +ferieEff.toFixed(2),
+    permGoduti:    +permGoduti.toFixed(2),
+    permPagati:    +permPagati.toFixed(2),
+    permUsed:      +(permGoduti + permPagati).toFixed(2)  // totale consumato (per residuo)
   };
 }
 
@@ -1311,18 +1369,23 @@ function getYearTotals(user, year, simMode) {
   const currResP = +(mat.permessi - usedCurrP).toFixed(2); // può essere negativo
 
   return {
-    prevFerieMat:  prevRes.ferie,
-    prevFerieUsed: consumedPrevF,
-    prevFerieRes:  prevResNetF,
-    prevPermMat:   prevRes.permessi,
-    prevPermUsed:  consumedPrevP,
-    prevPermRes:   prevResNetP,
-    ferieMat:      mat.ferie,
-    ferieUsed:     usedCurrF,
-    ferieRes:      currResF,
-    permessiMat:   mat.permessi,
-    permessiUsed:  usedCurrP,
-    permessiRes:   currResP
+    prevFerieMat:    prevRes.ferie,
+    prevFerieUsed:   consumedPrevF,
+    prevFerieRes:    prevResNetF,
+    prevPermMat:     prevRes.permessi,
+    prevPermUsed:    consumedPrevP,
+    // breakdown goduti/pagati proporzionale al consumo dal residuo prec
+    prevPermGoduti:  +Math.min(used.permGoduti, consumedPrevP).toFixed(2),
+    prevPermPagati:  +Math.max(0, consumedPrevP - used.permGoduti).toFixed(2),
+    prevPermRes:     prevResNetP,
+    ferieMat:        mat.ferie,
+    ferieUsed:       usedCurrF,
+    ferieRes:        currResF,
+    permessiMat:     mat.permessi,
+    permessiUsed:    usedCurrP,
+    permessiGoduti:  +Math.max(0, used.permGoduti - Math.min(used.permGoduti, consumedPrevP)).toFixed(2),
+    permessiPagati:  +Math.max(0, used.permPagati - Math.max(0, consumedPrevP - used.permGoduti)).toFixed(2),
+    permessiRes:     currResP
   };
 }
 
@@ -1332,18 +1395,21 @@ function getMonthUsed(user, year, month, simMode) {
   const entries = (user.entries || []).filter(e =>
     e.anno === year && e.mese === month && (simMode ? true : !e.sim)
   );
-  let ferieRaw = 0, ferieEff = 0, permUsed = 0;
+  let ferieRaw = 0, ferieEff = 0, permGoduti = 0, permPagati = 0;
   entries.forEach(e => {
     if (e.tipo === 'ferie') {
       ferieRaw += (e.qty || 0);
       ferieEff += (e.qty || 0) * calcMode;
     }
-    if (e.tipo === 'permesso') permUsed += (e.qty || 0);
+    if (e.tipo === 'permesso')        permGoduti += (e.qty || 0);
+    if (e.tipo === 'permesso_pagato') permPagati += (e.qty || 0);
   });
   return {
-    ferieRaw:  +ferieRaw.toFixed(2),
-    ferieUsed: +ferieEff.toFixed(2),
-    permUsed:  +permUsed.toFixed(2)
+    ferieRaw:   +ferieRaw.toFixed(2),
+    ferieUsed:  +ferieEff.toFixed(2),
+    permGoduti: +permGoduti.toFixed(2),
+    permPagati: +permPagati.toFixed(2),
+    permUsed:   +(permGoduti + permPagati).toFixed(2)
   };
 }
 
@@ -1432,16 +1498,18 @@ function renderSummary(user) {
   document.getElementById('fpMat').textContent  = fmt(t.prevFerieMat,  ' gg');
   document.getElementById('fpUsed').textContent = fmt(t.prevFerieUsed, ' gg' + calcLabel);
   document.getElementById('fpRes').textContent  = fmt(t.prevFerieRes,  ' gg');
-  document.getElementById('ppMat').textContent  = fmt(t.prevPermMat,   'h');
-  document.getElementById('ppUsed').textContent = fmt(t.prevPermUsed,  'h');
-  document.getElementById('ppRes').textContent  = fmt(t.prevPermRes,   'h');
+  document.getElementById('ppMat').textContent    = fmt(t.prevPermMat,     'h');
+  document.getElementById('ppUsed').textContent   = fmt(t.prevPermGoduti,  'h');
+  document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
+  document.getElementById('ppRes').textContent    = fmt(t.prevPermRes,     'h');
 
-  document.getElementById('fcMat').textContent  = fmt(t.ferieMat,      ' gg');
-  document.getElementById('fcUsed').textContent = fmt(t.ferieUsed,     ' gg' + calcLabel);
-  document.getElementById('fcRes').textContent  = fmt(t.ferieRes,      ' gg');
-  document.getElementById('pcMat').textContent  = fmt(t.permessiMat,   'h');
-  document.getElementById('pcUsed').textContent = fmt(t.permessiUsed,  'h');
-  document.getElementById('pcRes').textContent  = fmt(t.permessiRes,   'h');
+  document.getElementById('fcMat').textContent    = fmt(t.ferieMat,        ' gg');
+  document.getElementById('fcUsed').textContent   = fmt(t.ferieUsed,       ' gg' + calcLabel);
+  document.getElementById('fcRes').textContent    = fmt(t.ferieRes,        ' gg');
+  document.getElementById('pcMat').textContent    = fmt(t.permessiMat,     'h');
+  document.getElementById('pcUsed').textContent   = fmt(t.permessiGoduti,  'h');
+  document.getElementById('pcPagate').textContent = fmt(t.permessiPagati,  'h');
+  document.getElementById('pcRes').textContent    = fmt(t.permessiRes,     'h');
 }
 
 function renderMonthInfo(user) {
@@ -1450,14 +1518,15 @@ function renderMonthInfo(user) {
   const used    = getMonthUsed(user, viewYear, viewMonth, simMode);
   const saldo   = getMonthSaldo(user, viewYear, viewMonth, simMode);
 
-  document.getElementById('mSaldoInizioferie').textContent = fmt(saldo.saldoInizioF, ' gg');
-  document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP, 'h');
-  document.getElementById('mMaturazioneFerie').textContent = fmt(mat.ferie,           ' gg');
-  document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,        'h');
-  document.getElementById('mUsateFerie').textContent       = fmt(used.ferieUsed,      ' gg');
-  document.getElementById('mUsatePerm').textContent        = fmt(used.permUsed,       'h');
-  document.getElementById('mSaldoFineFerie').textContent   = fmt(saldo.saldoFineF,    ' gg');
-  document.getElementById('mSaldoFinePerm').textContent    = fmt(saldo.saldoFineP,    'h');
+  document.getElementById('mSaldoInizioferie').textContent = fmt(saldo.saldoInizioF,  ' gg');
+  document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP,  'h');
+  document.getElementById('mMaturazioneFerie').textContent = fmt(mat.ferie,            ' gg');
+  document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,         'h');
+  document.getElementById('mUsateFerie').textContent       = fmt(used.ferieUsed,       ' gg');
+  document.getElementById('mUsatePerm').textContent        = fmt(used.permGoduti,      'h');
+  document.getElementById('mPagatiPerm').textContent       = fmt(used.permPagati,      'h');
+  document.getElementById('mSaldoFineFerie').textContent   = fmt(saldo.saldoFineF,     ' gg');
+  document.getElementById('mSaldoFinePerm').textContent    = fmt(saldo.saldoFineP,     'h');
 }
 
 function renderActionRow() {
@@ -1470,7 +1539,8 @@ function renderActionRow() {
   } else {
     ar.innerHTML = `
       <button class="action-btn ferie-btn" onclick="openEntryModal('ferie')">🌴 Inserisci Ferie</button>
-      <button class="action-btn permesso-btn" onclick="openEntryModal('permesso')">🕐 Inserisci Permesso</button>`;
+      <button class="action-btn permesso-btn" onclick="openEntryModal('permesso')">🕐 Inserisci Permesso</button>
+      <button class="action-btn" onclick="openLiquidaModal()" style="background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-top:4px">💰 Liquida Permessi</button>`;
   }
 }
 
@@ -1508,36 +1578,38 @@ function renderEntries(user) {
 
   function renderEntryCard(e, forceReadonly) {
     const isSim = e.sim;
+    const isPagato = e.tipo === 'permesso_pagato';
     const dates = (e.dateTo && e.dateTo !== e.dateFrom) ? `${e.dateFrom} → ${e.dateTo}` : (e.dateFrom || '');
     let cls, icon, cardType;
-    if (isSim) { cls = 's'; icon = '🔮'; cardType = 'sim'; }
-    else if (e.tipo === 'ferie') { cls = 'f'; icon = '🌴'; cardType = 'ferie'; }
-    else { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
+    if (isSim)             { cls = 's'; icon = '🔮'; cardType = 'sim'; }
+    else if (e.tipo === 'ferie')    { cls = 'f'; icon = '🌴'; cardType = 'ferie'; }
+    else if (isPagato)     { cls = 's'; icon = '💰'; cardType = 'permesso'; }
+    else                   { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
 
     const qty = e.tipo === 'ferie' ? fmt(e.qty * calcMode, ' gg') : fmt(e.qty, 'h');
-    const readonly = forceReadonly || (!isSim && simMode);
+    const readonly = forceReadonly || (!isSim && simMode) || isPagato;
     const badge = (!isSim && simMode) ? '<span style="font-size:9px;background:rgba(255,255,255,.07);color:var(--text3);padding:1px 5px;border-radius:8px;margin-left:4px">ufficiale</span>' : '';
     const obbBadge = e.obbligata ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">🏢 obbligata</span>' : '';
+    const pagatoBadge = isPagato ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">💰 liquidato</span>' : '';
     let actions = '';
-    const obbToggle = readonly ? '' :
+    const obbToggle = (readonly || isPagato) ? '' :
       `<span class="entry-confirm" style="background:${e.obbligata?'rgba(245,158,11,.25)':'rgba(255,255,255,.06)'};color:${e.obbligata?'var(--accent-sim)':'var(--text3)'};border-color:${e.obbligata?'rgba(245,158,11,.4)':'var(--border)'}" onclick="toggleObbligata('${e.id}')" title="Segna come obbligata/chiusura aziendale">🏢</span>`;
-    if (readonly) {
+    if (readonly && !isPagato) {
       actions = '<span style="width:20px"></span>';
     } else if (isSim) {
-      // voce simulata: tasto conferma + obbligata + elimina
       actions = obbToggle
               + `<span class="entry-confirm" onclick="confirmSingleEntry('${e.id}')">✅ Conferma</span>`
               + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     } else {
-      actions = obbToggle
-              + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
+      actions = obbToggle + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     }
+    const titleText = e.note || (e.tipo==='ferie' ? 'Ferie' : isPagato ? 'Permessi liquidati' : 'Permesso');
     return `
-      <div class="entry-card tipo-${cardType}" style="${readonly && simMode ? 'opacity:0.65' : ''}">
+      <div class="entry-card tipo-${cardType}" style="${readonly && simMode ? 'opacity:0.65' : ''}${isPagato ? 'border-left-color:var(--accent-sim)' : ''}">
         <div class="entry-inner">
           <div class="entry-icon ${cls}">${icon}</div>
           <div class="entry-body">
-            <div class="entry-title"><span class="entry-title-text">${e.note || (e.tipo==='ferie'?'Ferie':'Permesso')}</span><span class="entry-title-badges">${badge}${obbBadge}</span></div>
+            <div class="entry-title"><span class="entry-title-text">${titleText}</span><span class="entry-title-badges">${badge}${obbBadge}${pagatoBadge}</span></div>
             <div class="entry-sub">${dates}</div>
           </div>
           <div class="entry-right">
@@ -1551,10 +1623,11 @@ function renderEntries(user) {
   let html = '';
 
   // Sezione ufficiali (in sim mode, readonly)
-  const offFerie = toShow.filter(e => !e.sim && e.tipo === 'ferie');
-  const offPerm  = toShow.filter(e => !e.sim && e.tipo === 'permesso');
-  const simFerie = toShow.filter(e =>  e.sim && e.tipo === 'ferie');
-  const simPerm  = toShow.filter(e =>  e.sim && e.tipo === 'permesso');
+  const offFerie  = toShow.filter(e => !e.sim && e.tipo === 'ferie');
+  const offPerm   = toShow.filter(e => !e.sim && e.tipo === 'permesso');
+  const offPagati = toShow.filter(e => !e.sim && e.tipo === 'permesso_pagato');
+  const simFerie  = toShow.filter(e =>  e.sim && e.tipo === 'ferie');
+  const simPerm   = toShow.filter(e =>  e.sim && e.tipo === 'permesso');
 
   if (offFerie.length || offPerm.length) {
     if (simMode) html += `<div class="entries-section-label" style="color:var(--text3)">📋 Ferie & Permessi Ufficiali</div>`;
@@ -1562,6 +1635,11 @@ function renderEntries(user) {
     offFerie.forEach(e => { html += renderEntryCard(e, simMode); });
     if (!simMode && offPerm.length) html += `<div class="entries-section-label">🕐 Permessi</div>`;
     offPerm.forEach(e => { html += renderEntryCard(e, simMode); });
+  }
+
+  if (offPagati.length) {
+    html += `<div class="entries-section-label" style="color:var(--accent-sim)">💰 Permessi Liquidati</div>`;
+    offPagati.forEach(e => { html += renderEntryCard(e, false); });
   }
 
   if (simFerie.length || simPerm.length) {
@@ -1782,6 +1860,45 @@ function deleteEntry(id) {
   saveDb();
   renderAll();
   showToast('🗑 Voce eliminata');
+}
+
+function openLiquidaModal() {
+  // Pre-popola con mese/anno corrente e residuo attuale
+  document.getElementById('liquidaMese').value = viewMonth;
+  document.getElementById('liquidaAnno').value  = viewYear;
+  document.getElementById('liquidaQty').value   = '';
+  document.getElementById('liquidaNota').value  = 'Liquidazione permessi residui';
+  // Mostra il residuo corrente come suggerimento
+  const t = getYearTotals(currentUser(), viewYear, false);
+  const residuoTot = +(t.prevPermRes + t.permessiRes).toFixed(2);
+  document.getElementById('liquidaHint').textContent =
+    `Saldo permessi disponibile al ${MONTHS[viewMonth-1]} ${viewYear}: ${residuoTot}h`;
+  document.getElementById('liquidaModal').classList.add('open');
+}
+
+function closeLiquidaModal() {
+  document.getElementById('liquidaModal').classList.remove('open');
+}
+
+function saveLiquidazione() {
+  const user  = currentUser();
+  const mese  = parseInt(document.getElementById('liquidaMese').value);
+  const anno  = parseInt(document.getElementById('liquidaAnno').value);
+  const qty   = parseFloat(document.getElementById('liquidaQty').value);
+  const nota  = document.getElementById('liquidaNota').value.trim() || 'Liquidazione permessi';
+
+  if (!mese || !anno || !qty || qty <= 0) {
+    showToast('Inserisci mese, anno e ore validi'); return;
+  }
+  if (!user.entries) user.entries = [];
+  user.entries.push({
+    id: genId(), tipo: 'permesso_pagato',
+    dateFrom: `${anno}-${String(mese).padStart(2,'0')}-01`,
+    dateTo:   `${anno}-${String(mese).padStart(2,'0')}-01`,
+    qty, note: nota, mese, anno, sim: false, obbligata: false
+  });
+  saveDb(); closeLiquidaModal(); renderAll();
+  showToast(`💰 ${qty}h permessi liquidati in ${MONTHS[mese-1]} ${anno}`);
 }
 
 function toggleObbligata(id) {
@@ -2206,13 +2323,15 @@ function expandEntryDays(e, user) {
 function computeObbligateStats(entries, calcMode) {
   const res = {
     ferie:    { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 },
-    permesso: { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 }
+    permesso: { obbEp: 0, richEp: 0, obbQty: 0, richQty: 0 },
+    pagati:   { ep: 0, qty: 0 }
   };
   entries.forEach(e => {
+    if (e.tipo === 'permesso_pagato') {
+      res.pagati.ep++; res.pagati.qty += (e.qty || 0); return;
+    }
     const bucket = res[e.tipo];
     if (!bucket) return;
-    // Ferie: valore decurtato reale (qty × calcMode, es. ×1.2 CCNL).
-    // Permessi: nessun moltiplicatore, come nel resto dell'app.
     const value = e.tipo === 'ferie' ? (e.qty || 0) * calcMode : (e.qty || 0);
     if (e.obbligata) { bucket.obbEp++;  bucket.obbQty  += value; }
     else             { bucket.richEp++; bucket.richQty += value; }
@@ -2305,6 +2424,19 @@ function renderStats(user) {
 
   html += renderTypeBlock('Ferie', '🌴', 'var(--accent-f)', obb.ferie, ' gg');
   html += renderTypeBlock('Permessi', '🕐', 'var(--accent-p)', obb.permesso, 'h');
+
+  // Blocco permessi liquidati
+  if (obb.pagati.ep > 0) {
+    html += `<div style="background:var(--surface2);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent-sim);margin-bottom:8px">💰 Permessi Liquidati</div>
+      <div style="font-size:12px;color:var(--text2)">
+        <strong>${fmt(+obb.pagati.qty.toFixed(2), 'h')}</strong> liquidati in busta paga · ${obb.pagati.ep} episodi
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+        Non conteggiate come permessi goduti — scalate dal saldo disponibile
+      </div>
+    </div>`;
+  }
 
   // ── Sezione Distribuzione giorni della settimana ──
   html += `
@@ -2521,7 +2653,7 @@ function hideCalTip() {
     if (e.target === this) this.classList.remove('open');
   });
 });
-['entryModal','monthPickerModal'].forEach(id => {
+['entryModal','monthPickerModal','liquidaModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('open');
   });
@@ -2535,9 +2667,9 @@ renderAll();
 setupFirebaseAuthListener();
 </script>
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
 </script>
