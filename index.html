@@ -1317,18 +1317,26 @@ function getYearUsed(user, year, simMode) {
  * Usa SEMPRE e solo voci ufficiali (mai simulate) per la storia pregressa.
  */
 function getResiduoAnniPrecedenti(user, year) {
-  // Considera SOLO gli anni esplicitamente configurati dall'utente in user.anni
-  // (NON la data di assunzione: quella serve solo per il calcolo mensile interno
-  // all'anno, non per ricostruire storico fittizio su anni mai tracciati in app)
-  const years = Object.keys(user.anni || {}).map(Number).filter(y => y < year);
-  if (!years.length) return { ferie: 0, permessi: 0 };
-  const startYear = Math.min(...years);
+  // L'anno di partenza è il minore tra:
+  // - il primo anno esplicitamente in user.anni (dati inseriti)
+  // - l'anno di assunzione (dataInizioContratto)
+  // Questo garantisce che i permessi maturati dal primo giorno vengano conteggiati
+  // anche se user.anni non include l'anno di assunzione.
+  const configuredYears = Object.keys(user.anni || {}).map(Number).filter(y => y < year);
+  let startYear = configuredYears.length ? Math.min(...configuredYears) : year;
+  if (user.dataInizioContratto) {
+    const hireYear = new Date(user.dataInizioContratto).getFullYear();
+    if (hireYear < year) startYear = Math.min(startYear, hireYear);
+  }
+  if (startYear >= year) return { ferie: 0, permessi: 0 };
 
   let residuoFerie = 0, residuoPerm = 0;
   for (let y = startYear; y < year; y++) {
     const mat  = getAnnualMat(user, y);
     const used = getYearUsed(user, y, false); // solo ufficiali, storia consolidata
+    // Ferie: Math.max(0) perché le ferie non possono essere "in debito" tra anni
     residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
+    // Permessi: non azzerare mai automaticamente (il saldo accumula finché non si liquida)
     residuoPerm  = Math.max(0, +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2));
   }
   return { ferie: residuoFerie, permessi: residuoPerm };
