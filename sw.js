@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ferie-permessi-v18';
+const CACHE_NAME = 'ferie-permessi-v19';
 const ASSETS = [
   'index.html',
   'manifest.json',
