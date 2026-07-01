@@ -678,12 +678,10 @@
     <div class="section-title permessi">🕐 Permessi</div>
     <div class="year-block">
       <div class="year-block-label">Saldo Anni Precedenti</div>
-      <div class="stat-row"><span class="stat-label" id="ppMatLabel">Maturate</span><span class="stat-value" id="ppMat" style="color:var(--accent-p)">—</span></div>
-      <div class="stat-row" id="ppExtraRows">
-        <div class="stat-row" style="padding:0"><span class="stat-label">Godute</span><span class="stat-value red" id="ppUsed">—</span></div>
-        <div class="stat-row" style="padding:0"><span class="stat-label">Pagate</span><span class="stat-value" style="color:var(--accent-sim)" id="ppPagate">—</span></div>
-        <div class="stat-row" style="padding:0"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
-      </div>
+      <div class="stat-row"><span class="stat-label">Maturate</span><span class="stat-value blue" id="ppMat">—</span></div>
+      <div class="stat-row"><span class="stat-label">Godute</span><span class="stat-value red" id="ppUsed">—</span></div>
+      <div class="stat-row"><span class="stat-label">Pagate</span><span class="stat-value" style="color:var(--accent-sim)" id="ppPagate">—</span></div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
     </div>
     <div class="year-divider"></div>
     <div class="year-block">
@@ -1338,8 +1336,8 @@ function getResiduoAnniPrecedenti(user, year) {
     const used = getYearUsed(user, y, false); // solo ufficiali, storia consolidata
     // Ferie: Math.max(0) perché le ferie non possono essere "in debito" tra anni
     residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
-    // Permessi: NESSUN azzeramento — il debito si porta avanti fino a recupero o liquidazione
-    residuoPerm  = +(residuoPerm + mat.permessi - used.permUsed).toFixed(2);
+    // Permessi: non azzerare mai automaticamente (il saldo accumula finché non si liquida)
+    residuoPerm  = Math.max(0, +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2));
   }
   return { ferie: residuoFerie, permessi: residuoPerm };
 }
@@ -1362,57 +1360,43 @@ function getResiduoAnniPrecedenti(user, year) {
  */
 function getYearTotals(user, year, simMode) {
   const mat  = getAnnualMat(user, year);
-  const used = getYearUsed(user, year, simMode);
+  const used = getYearUsed(user, year, simMode); // rispetta simMode (sim entries anno corrente)
 
+  // Saldo anni precedenti: cumulativo multi-anno, sempre solo storia ufficiale
   const prevRes = getResiduoAnniPrecedenti(user, year);
 
-  // ── FERIE (carry-forward sempre ≥ 0) ──
+  // Quanto del saldo anni prec. viene consumato dalle voci dell'anno corrente
   const consumedPrevF = +Math.min(used.ferieUsed, prevRes.ferie).toFixed(2);
-  const prevResNetF   = +(prevRes.ferie - consumedPrevF).toFixed(2);
-  const usedCurrF     = +(used.ferieUsed - consumedPrevF).toFixed(2);
-  const currResF      = +(mat.ferie - usedCurrF).toFixed(2);
+  const consumedPrevP = +Math.min(used.permUsed,  prevRes.permessi).toFixed(2);
 
-  // ── PERMESSI (può essere negativo = debito portato da anni prec.) ──
-  let consumedPrevP, prevResNetP, usedCurrP, currResP;
-  let prevPermGoduti, prevPermPagati;
+  const prevResNetF = +(prevRes.ferie    - consumedPrevF).toFixed(2);
+  const prevResNetP = +(prevRes.permessi - consumedPrevP).toFixed(2);
 
-  if (prevRes.permessi >= 0) {
-    // Carry-forward positivo: le voci anno corrente scalano prima dal residuo prec.
-    consumedPrevP  = +Math.min(used.permUsed, prevRes.permessi).toFixed(2);
-    prevResNetP    = +(prevRes.permessi - consumedPrevP).toFixed(2);
-    usedCurrP      = +(used.permUsed - consumedPrevP).toFixed(2);
-    currResP       = +(mat.permessi - usedCurrP).toFixed(2);
-    prevPermGoduti = +Math.min(used.permGoduti, consumedPrevP).toFixed(2);
-    prevPermPagati = +Math.max(0, consumedPrevP - used.permGoduti).toFixed(2);
-  } else {
-    // Debito da anni prec.: non si può consumare da un saldo negativo.
-    // Le voci anno corrente scalano interamente dalla maturazione dell'anno corrente.
-    // Il debito rimane visibile in "Saldo Anni Prec." e si riflette nel saldo mensile.
-    consumedPrevP  = 0;
-    prevResNetP    = prevRes.permessi; // debito rimane inalterato
-    usedCurrP      = used.permUsed;    // tutto dal pool dell'anno corrente
-    currResP       = +(mat.permessi - usedCurrP).toFixed(2);
-    prevPermGoduti = 0;
-    prevPermPagati = 0;
-  }
+  // Eccedenza che intacca l'anno corrente
+  const usedCurrF = +(used.ferieUsed - consumedPrevF).toFixed(2);
+  const usedCurrP = +(used.permUsed  - consumedPrevP).toFixed(2);
+
+  const currResF = +(mat.ferie    - usedCurrF).toFixed(2); // può essere negativo
+  const currResP = +(mat.permessi - usedCurrP).toFixed(2); // può essere negativo
 
   return {
-    prevFerieMat:   prevRes.ferie,
-    prevFerieUsed:  consumedPrevF,
-    prevFerieRes:   prevResNetF,
-    prevPermMat:    prevRes.permessi,   // può essere negativo (= debito)
-    prevPermUsed:   consumedPrevP,
-    prevPermGoduti,
-    prevPermPagati,
-    prevPermRes:    prevResNetP,        // può essere negativo (= debito residuo)
-    ferieMat:       mat.ferie,
-    ferieUsed:      usedCurrF,
-    ferieRes:       currResF,
-    permessiMat:    mat.permessi,
-    permessiUsed:   usedCurrP,
-    permessiGoduti: +Math.max(0, used.permGoduti - prevPermGoduti).toFixed(2),
-    permessiPagati: +Math.max(0, used.permPagati - prevPermPagati).toFixed(2),
-    permessiRes:    currResP
+    prevFerieMat:    prevRes.ferie,
+    prevFerieUsed:   consumedPrevF,
+    prevFerieRes:    prevResNetF,
+    prevPermMat:     prevRes.permessi,
+    prevPermUsed:    consumedPrevP,
+    // breakdown goduti/pagati proporzionale al consumo dal residuo prec
+    prevPermGoduti:  +Math.min(used.permGoduti, consumedPrevP).toFixed(2),
+    prevPermPagati:  +Math.max(0, consumedPrevP - used.permGoduti).toFixed(2),
+    prevPermRes:     prevResNetP,
+    ferieMat:        mat.ferie,
+    ferieUsed:       usedCurrF,
+    ferieRes:        currResF,
+    permessiMat:     mat.permessi,
+    permessiUsed:    usedCurrP,
+    permessiGoduti:  +Math.max(0, used.permGoduti - Math.min(used.permGoduti, consumedPrevP)).toFixed(2),
+    permessiPagati:  +Math.max(0, used.permPagati - Math.max(0, consumedPrevP - used.permGoduti)).toFixed(2),
+    permessiRes:     currResP
   };
 }
 
@@ -1526,20 +1510,9 @@ function renderSummary(user) {
   document.getElementById('fpUsed').textContent = fmt(t.prevFerieUsed, ' gg' + calcLabel);
   document.getElementById('fpRes').textContent  = fmt(t.prevFerieRes,  ' gg');
   document.getElementById('ppMat').textContent    = fmt(t.prevPermMat,     'h');
+  document.getElementById('ppUsed').textContent   = fmt(t.prevPermGoduti,  'h');
+  document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
   document.getElementById('ppRes').textContent    = fmt(t.prevPermRes,     'h');
-
-  if (t.prevPermMat < 0) {
-    // Debito da anni prec.: mostra solo il debito, nascondi godute/pagate (non applicabili)
-    document.getElementById('ppMatLabel').textContent  = '⚠️ Debito portato';
-    document.getElementById('ppMat').style.color       = 'var(--danger)';
-    document.getElementById('ppExtraRows').style.display = 'none';
-  } else {
-    document.getElementById('ppMatLabel').textContent  = 'Maturate';
-    document.getElementById('ppMat').style.color       = 'var(--accent-p)';
-    document.getElementById('ppExtraRows').style.display = '';
-    document.getElementById('ppUsed').textContent   = fmt(t.prevPermGoduti,  'h');
-    document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
-  }
 
   document.getElementById('fcMat').textContent    = fmt(t.ferieMat,        ' gg');
   document.getElementById('fcUsed').textContent   = fmt(t.ferieUsed,       ' gg' + calcLabel);
@@ -2707,17 +2680,7 @@ setupFirebaseAuthListener();
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
-      .then(reg => {
-        reg.update();
-        reg.addEventListener("updatefound", () => {
-          const nw = reg.installing;
-          nw.addEventListener("statechange", () => {
-            if (nw.state === "activated") window.location.reload();
-          });
-        });
-      })
-      .catch(() => {});
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
 </script>
