@@ -592,7 +592,8 @@
     getRedirectResult, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp
+    getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
+    collection, getDocs, deleteDoc, writeBatch
   } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -612,7 +613,7 @@
   window.firebaseAuth = fbAuth;
   window.firebaseDB   = fbDb;
   window.firebaseAuthMethods = { signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, GoogleAuthProvider };
-  window.firestoreMethods    = { doc, getDoc, setDoc, onSnapshot, serverTimestamp };
+  window.firestoreMethods    = { doc, getDoc, setDoc, onSnapshot, serverTimestamp, collection, getDocs, deleteDoc, writeBatch };
   window.fbProvider = fbProvider;
 
   window.dispatchEvent(new Event('firebase-ready'));
@@ -627,6 +628,7 @@
     <button class="icon-btn" onclick="openSettingsPanel()" title="Impostazioni">⚙️</button>
     <button class="icon-btn" onclick="openBackupPanel()" title="Backup">💾</button>
     <button class="icon-btn" id="cloudSyncBtn" onclick="manualSync()" title="Sincronizza" style="display:none">☁️</button>
+    <button class="icon-btn" id="adminPanelBtn" onclick="openAdminPanel()" title="Pannello Admin" style="display:none">👑</button>
     <button class="icon-btn" id="loginBtn" onclick="doGoogleLogin()" title="Accedi con Google">🔑</button>
     <div class="user-chip" onclick="openUserPanel()">
       <div class="user-avatar" id="headerAvatar">?</div>
@@ -635,6 +637,47 @@
     <button class="icon-btn" id="logoutBtn" onclick="doLogout()" title="Esci" style="display:none">🚪</button>
   </div>
 </header>
+
+<!-- SCHERMATA ATTESA APPROVAZIONE -->
+<div id="waitingScreen" style="display:none;position:fixed;inset:0;z-index:999;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
+  <div style="font-size:64px;margin-bottom:24px">⏳</div>
+  <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:12px">In attesa di approvazione</div>
+  <div style="font-size:14px;color:var(--text2);line-height:1.6;max-width:300px;margin-bottom:24px">
+    La tua registrazione è stata ricevuta.<br>
+    L'amministratore riceverà la notifica e ti darà accesso a breve.
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:32px" id="waitingEmail"></div>
+  <button onclick="doLogout()" style="padding:10px 20px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text2);cursor:pointer;font-size:13px">Esci</button>
+  <div id="claimAdminSection" style="display:none;margin-top:32px;padding:20px;background:var(--surface2);border:1px solid rgba(245,158,11,.3);border-radius:14px;max-width:320px">
+    <div style="font-size:13px;font-weight:700;color:var(--accent-sim);margin-bottom:8px">⚠️ Nessun admin configurato</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Sei il primo utente. Vuoi diventare l'amministratore?</div>
+    <button onclick="claimAdmin()" style="width:100%;padding:10px;background:var(--accent-sim);color:#000;border:none;border-radius:10px;font-weight:700;cursor:pointer">👑 Diventa Amministratore</button>
+  </div>
+</div>
+
+<!-- SCHERMATA ACCESSO NEGATO -->
+<div id="rejectedScreen" style="display:none;position:fixed;inset:0;z-index:999;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
+  <div style="font-size:64px;margin-bottom:24px">🚫</div>
+  <div style="font-size:20px;font-weight:700;color:var(--danger);margin-bottom:12px">Accesso negato</div>
+  <div style="font-size:14px;color:var(--text2);line-height:1.6;max-width:300px;margin-bottom:32px">
+    La tua richiesta di accesso è stata rifiutata.<br>
+    Contatta l'amministratore per maggiori informazioni.
+  </div>
+  <button onclick="doLogout()" style="padding:10px 20px;background:var(--danger);border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:13px;font-weight:700">Esci</button>
+</div>
+
+<!-- PANNELLO ADMIN -->
+<div class="panel-overlay" id="adminPanel">
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">👑 Pannello Admin</span>
+      <button class="panel-close" onclick="closeAdminPanel()">✕</button>
+    </div>
+    <div style="padding:0 16px 16px" id="adminPanelContent">
+      <div style="color:var(--text3);font-size:13px">Caricamento...</div>
+    </div>
+  </div>
+</div>
 
 <!-- NAV TABS -->
 <div class="nav-tabs">
@@ -678,12 +721,12 @@
     <div class="section-title permessi">🕐 Permessi</div>
     <div class="year-block">
       <div class="year-block-label">Saldo Anni Precedenti</div>
-      <div class="stat-row"><span class="stat-label" id="ppMatLabel">Maturate</span><span class="stat-value" id="ppMat" style="color:var(--accent-p)">—</span></div>
-      <div class="stat-row" id="ppExtraRows">
+      <div class="stat-row"><span class="stat-label" id="ppMatLabel">Maturate</span><span class="stat-value blue" id="ppMat">—</span></div>
+      <div class="stat-row" id="ppGodutePagateRows">
         <div class="stat-row" style="padding:0"><span class="stat-label">Godute</span><span class="stat-value red" id="ppUsed">—</span></div>
         <div class="stat-row" style="padding:0"><span class="stat-label">Pagate</span><span class="stat-value" style="color:var(--accent-sim)" id="ppPagate">—</span></div>
-        <div class="stat-row" style="padding:0"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
       </div>
+      <div class="stat-row"><span class="stat-label">Residue</span><span class="stat-value white" id="ppRes">—</span></div>
     </div>
     <div class="year-divider"></div>
     <div class="year-block">
@@ -1055,9 +1098,10 @@ function saveDb() {
 }
 
 // ═══════════════════════════════════════════════
-//  FIREBASE SYNC (Google Sign-In + Firestore)
+//  FIREBASE SYNC + SISTEMA APPROVAZIONE
 // ═══════════════════════════════════════════════
 let fbUser = null;
+let fbIsAdmin = false;
 let fbUnsubscribe = null;
 let fbSavePending = false;
 let saveDbDebounce = null;
@@ -1065,6 +1109,11 @@ let saveDbDebounce = null;
 function getFbDocRef() {
   if (!fbUser || !window.firestoreMethods) return null;
   return window.firestoreMethods.doc(window.firebaseDB, 'feriePermessi_data', fbUser.uid);
+}
+
+function showScreen(name) {
+  document.getElementById('waitingScreen').style.display  = name === 'waiting'  ? 'flex' : 'none';
+  document.getElementById('rejectedScreen').style.display = name === 'rejected' ? 'flex' : 'none';
 }
 
 async function doGoogleLogin() {
@@ -1082,6 +1131,7 @@ async function doLogout() {
   if (!confirm('Disconnettersi da Google? I dati restano salvati su questo dispositivo.')) return;
   if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe = null; }
   await window.firebaseAuthMethods.signOut(window.firebaseAuth);
+  showScreen('app');
   showToast('👋 Disconnesso');
 }
 
@@ -1097,11 +1147,7 @@ async function pushDbToFirestore() {
   const { setDoc, serverTimestamp } = window.firestoreMethods;
   fbSavePending = true;
   try {
-    await setDoc(ref, {
-      users: db.users,
-      currentUserId: db.currentUserId,
-      lastModified: serverTimestamp()
-    });
+    await setDoc(ref, { users: db.users, currentUserId: db.currentUserId, lastModified: serverTimestamp() });
   } catch (e) { console.error('Errore salvataggio Firestore', e); }
   setTimeout(() => { fbSavePending = false; }, 1500);
 }
@@ -1111,14 +1157,13 @@ function startFirestoreListener() {
   if (!ref) return;
   const { onSnapshot } = window.firestoreMethods;
   fbUnsubscribe = onSnapshot(ref, snap => {
-    if (fbSavePending) return; // ignora l'eco del proprio salvataggio
+    if (fbSavePending) return;
     if (snap.exists()) {
       const data = snap.data();
       if (data.users && data.users.length) {
         db = { users: data.users, currentUserId: data.currentUserId || data.users[0].id };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-        renderAll();
-        renderUserList();
+        renderAll(); renderUserList();
       }
     }
   }, err => console.error('Errore listener Firestore', err));
@@ -1126,9 +1171,10 @@ function startFirestoreListener() {
 
 async function initFirestoreSync(user) {
   fbUser = user;
-  document.getElementById('loginBtn').style.display  = 'none';
-  document.getElementById('logoutBtn').style.display = '';
+  document.getElementById('loginBtn').style.display     = 'none';
+  document.getElementById('logoutBtn').style.display    = '';
   document.getElementById('cloudSyncBtn').style.display = '';
+  if (fbIsAdmin) document.getElementById('adminPanelBtn').style.display = '';
 
   const ref = getFbDocRef();
   const { getDoc } = window.firestoreMethods;
@@ -1144,9 +1190,168 @@ async function initFirestoreSync(user) {
       showToast('☁️ Dati locali migrati su cloud');
     }
   } catch (e) { console.error('Errore lettura Firestore', e); }
-
   renderAll();
   startFirestoreListener();
+}
+
+// ── SISTEMA APPROVAZIONE ──
+
+async function checkApprovalStatus(user) {
+  const { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } = window.firestoreMethods;
+  const db_ = window.firebaseDB;
+
+  // 1. Controlla admin config
+  let admins = [];
+  let noAdminsYet = false;
+  try {
+    const adminsSnap = await getDoc(doc(db_, 'feriePermessi_config', 'admins'));
+    if (adminsSnap.exists()) {
+      admins = adminsSnap.data().uids || [];
+    } else {
+      noAdminsYet = true;
+    }
+  } catch (e) { noAdminsYet = true; }
+
+  fbIsAdmin = admins.includes(user.uid);
+
+  // 2. Leggi/crea registro utente
+  const regRef = doc(db_, 'feriePermessi_registry', user.uid);
+  let regData = null;
+  try {
+    const regSnap = await getDoc(regRef);
+    if (regSnap.exists()) {
+      regData = regSnap.data();
+    } else {
+      regData = {
+        name: user.displayName || user.email.split('@')[0],
+        email: user.email, photoURL: user.photoURL || null,
+        status: fbIsAdmin ? 'approved' : 'pending',
+        role: fbIsAdmin ? 'admin' : 'user',
+        registeredAt: serverTimestamp()
+      };
+      await setDoc(regRef, regData);
+    }
+  } catch (e) { console.error('Errore registro', e); return 'error'; }
+
+  if (fbIsAdmin) return 'approved';
+
+  // 3. Nessun admin: mostra opzione claim
+  if (noAdminsYet || admins.length === 0) {
+    document.getElementById('claimAdminSection').style.display = '';
+  }
+
+  return regData.status || 'pending';
+}
+
+async function claimAdmin() {
+  if (!fbUser) return;
+  const { doc, setDoc, serverTimestamp } = window.firestoreMethods;
+  const db_ = window.firebaseDB;
+  try {
+    await setDoc(doc(db_, 'feriePermessi_config', 'admins'), { uids: [fbUser.uid], updatedAt: serverTimestamp() });
+    await setDoc(doc(db_, 'feriePermessi_registry', fbUser.uid), {
+      name: fbUser.displayName || fbUser.email.split('@')[0],
+      email: fbUser.email, photoURL: fbUser.photoURL || null,
+      status: 'approved', role: 'admin', registeredAt: serverTimestamp()
+    });
+    fbIsAdmin = true;
+    showScreen('app');
+    await initFirestoreSync(fbUser);
+    showToast('👑 Sei ora l\'amministratore!');
+  } catch (e) { showToast('❌ Errore: ' + e.message); }
+}
+
+// ── PANNELLO ADMIN ──
+
+function openAdminPanel()  { document.getElementById('adminPanel').classList.add('open'); renderAdminPanel(); }
+function closeAdminPanel() { document.getElementById('adminPanel').classList.remove('open'); }
+
+async function renderAdminPanel() {
+  const content = document.getElementById('adminPanelContent');
+  content.innerHTML = '<div style="color:var(--text3);font-size:13px">Caricamento utenti...</div>';
+  const { collection, getDocs, doc, getDoc } = window.firestoreMethods;
+  const db_ = window.firebaseDB;
+  try {
+    const snap = await getDocs(collection(db_, 'feriePermessi_registry'));
+    const users = [];
+    snap.forEach(d => users.push({ uid: d.id, ...d.data() }));
+    users.sort((a, b) => { const o = { pending: 0, approved: 1, rejected: 2 }; return (o[a.status]||0)-(o[b.status]||0); });
+    if (!users.length) { content.innerHTML = '<div style="color:var(--text3);font-size:13px">Nessun utente registrato</div>'; return; }
+    const statusLabel = { pending: '⏳ In attesa', approved: '✅ Approvato', rejected: '❌ Rifiutato' };
+    const statusColor = { pending: 'var(--accent-sim)', approved: 'var(--accent-f)', rejected: 'var(--danger)' };
+    let html = '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">' + users.length + ' utente/i registrato/i</div>';
+    for (const u of users) {
+      const isSelf = u.uid === fbUser.uid;
+      const isAdm = u.role === 'admin';
+      const avatar = u.photoURL
+        ? '<img src="' + u.photoURL + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover">'
+        : '<div style="width:36px;height:36px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text2)">' + (u.name||'?')[0].toUpperCase() + '</div>';
+      html += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        + avatar
+        + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        + (u.name||'Senza nome') + (isAdm ? ' <span style="font-size:10px;color:var(--accent-sim)">👑 admin</span>' : '')
+        + (isSelf ? ' <span style="font-size:10px;color:var(--text3)">(tu)</span>' : '')
+        + '</div><div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (u.email||'') + '</div></div>'
+        + '<div style="font-size:11px;font-weight:700;color:' + (statusColor[u.status]||'var(--text3)') + ';white-space:nowrap">' + (statusLabel[u.status]||u.status) + '</div></div>';
+      if (!isSelf) {
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+        if (u.status !== 'approved') html += '<button onclick="adminSetStatus(\'' + u.uid + '\',\'approved\')" style="flex:1;padding:6px;background:rgba(74,222,128,.15);color:var(--accent-f);border:1px solid rgba(74,222,128,.3);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">✅ Approva</button>';
+        if (u.status === 'approved') html += '<button onclick="adminSetStatus(\'' + u.uid + '\',\'pending\')" style="flex:1;padding:6px;background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">🔒 Revoca</button>';
+        if (u.status !== 'rejected') html += '<button onclick="adminSetStatus(\'' + u.uid + '\',\'rejected\')" style="flex:1;padding:6px;background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">❌ Rifiuta</button>';
+        if (!isAdm) html += '<button onclick="adminSetRole(\'' + u.uid + '\',\'admin\')" style="flex:1;padding:6px;background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">👑 Promuovi</button>';
+        else html += '<button onclick="adminSetRole(\'' + u.uid + '\',\'user\')" style="flex:1;padding:6px;background:var(--surface3);color:var(--text3);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer">↓ Rimuovi admin</button>';
+        html += '<button onclick="adminDeleteUser(\'' + u.uid + '\',\'' + (u.name||'').replace(/\'/g,'') + '\')" style="padding:6px 10px;background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:11px;cursor:pointer">🗑</button>';
+        html += '</div>';
+      } else {
+        html += '<div style="font-size:11px;color:var(--text3);text-align:center">Account tuo</div>';
+      }
+      html += '</div>';
+    }
+    content.innerHTML = html;
+  } catch (e) { content.innerHTML = '<div style="color:var(--danger);font-size:13px">Errore: ' + e.message + '</div>'; }
+}
+
+async function adminSetStatus(uid, status) {
+  const { doc, setDoc, getDoc, serverTimestamp } = window.firestoreMethods;
+  try {
+    const ref = doc(window.firebaseDB, 'feriePermessi_registry', uid);
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : {};
+    await setDoc(ref, { ...existing, status, updatedAt: serverTimestamp() });
+    showToast(status === 'approved' ? '✅ Utente approvato' : status === 'rejected' ? '❌ Accesso rifiutato' : '🔒 Accesso revocato');
+    renderAdminPanel();
+  } catch (e) { showToast('❌ Errore: ' + e.message); }
+}
+
+async function adminSetRole(uid, role) {
+  const { doc, setDoc, getDoc, serverTimestamp } = window.firestoreMethods;
+  const db_ = window.firebaseDB;
+  try {
+    const ref = doc(db_, 'feriePermessi_registry', uid);
+    const snap = await getDoc(ref);
+    await setDoc(ref, { ...(snap.exists()?snap.data():{}), role, updatedAt: serverTimestamp() });
+    const adminsRef = doc(db_, 'feriePermessi_config', 'admins');
+    const adminsSnap = await getDoc(adminsRef);
+    let uids = adminsSnap.exists() ? (adminsSnap.data().uids || []) : [];
+    if (role === 'admin' && !uids.includes(uid)) uids.push(uid);
+    if (role === 'user') uids = uids.filter(u => u !== uid);
+    await setDoc(adminsRef, { uids, updatedAt: serverTimestamp() });
+    showToast(role === 'admin' ? '👑 Utente promosso admin' : '↓ Admin rimosso');
+    renderAdminPanel();
+  } catch (e) { showToast('❌ Errore: ' + e.message); }
+}
+
+async function adminDeleteUser(uid, name) {
+  if (!confirm('Eliminare TUTTI i dati di "' + name + '"? Questa azione è irreversibile.')) return;
+  const { doc, deleteDoc } = window.firestoreMethods;
+  const db_ = window.firebaseDB;
+  try {
+    await deleteDoc(doc(db_, 'feriePermessi_data', uid));
+    await deleteDoc(doc(db_, 'feriePermessi_registry', uid));
+    showToast('🗑 Utente e dati eliminati');
+    renderAdminPanel();
+  } catch (e) { showToast('❌ Errore: ' + e.message); }
 }
 
 function setupFirebaseAuthListener() {
@@ -1157,13 +1362,28 @@ function setupFirebaseAuthListener() {
   const { onAuthStateChanged } = window.firebaseAuthMethods;
   onAuthStateChanged(window.firebaseAuth, async user => {
     if (user) {
-      await initFirestoreSync(user);
+      const status = await checkApprovalStatus(user);
+      if (status === 'approved') {
+        showScreen('app');
+        await initFirestoreSync(user);
+      } else if (status === 'rejected') {
+        showScreen('rejected');
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = '';
+      } else {
+        showScreen('waiting');
+        document.getElementById('waitingEmail').textContent = user.email || '';
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = '';
+      }
     } else {
-      fbUser = null;
+      fbUser = null; fbIsAdmin = false;
       if (fbUnsubscribe) { fbUnsubscribe(); fbUnsubscribe = null; }
-      document.getElementById('loginBtn').style.display  = '';
-      document.getElementById('logoutBtn').style.display = 'none';
+      showScreen('app');
+      document.getElementById('loginBtn').style.display     = '';
+      document.getElementById('logoutBtn').style.display    = 'none';
       document.getElementById('cloudSyncBtn').style.display = 'none';
+      document.getElementById('adminPanelBtn').style.display = 'none';
     }
   });
 }
@@ -1338,8 +1558,8 @@ function getResiduoAnniPrecedenti(user, year) {
     const used = getYearUsed(user, y, false); // solo ufficiali, storia consolidata
     // Ferie: Math.max(0) perché le ferie non possono essere "in debito" tra anni
     residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
-    // Permessi: NESSUN azzeramento — il debito si porta avanti fino a recupero o liquidazione
-    residuoPerm  = +(residuoPerm + mat.permessi - used.permUsed).toFixed(2);
+    // Permessi: non azzerare mai automaticamente (il saldo accumula finché non si liquida)
+    residuoPerm  = +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2); // NO azzeramento: il debito si porta avanti
   }
   return { ferie: residuoFerie, permessi: residuoPerm };
 }
@@ -1373,46 +1593,33 @@ function getYearTotals(user, year, simMode) {
   const currResF      = +(mat.ferie - usedCurrF).toFixed(2);
 
   // ── PERMESSI (può essere negativo = debito portato da anni prec.) ──
-  let consumedPrevP, prevResNetP, usedCurrP, currResP;
-  let prevPermGoduti, prevPermPagati;
-
-  if (prevRes.permessi >= 0) {
-    // Carry-forward positivo: le voci anno corrente scalano prima dal residuo prec.
-    consumedPrevP  = +Math.min(used.permUsed, prevRes.permessi).toFixed(2);
-    prevResNetP    = +(prevRes.permessi - consumedPrevP).toFixed(2);
-    usedCurrP      = +(used.permUsed - consumedPrevP).toFixed(2);
-    currResP       = +(mat.permessi - usedCurrP).toFixed(2);
-    prevPermGoduti = +Math.min(used.permGoduti, consumedPrevP).toFixed(2);
-    prevPermPagati = +Math.max(0, consumedPrevP - used.permGoduti).toFixed(2);
-  } else {
-    // Debito da anni prec.: non si può consumare da un saldo negativo.
-    // Le voci anno corrente scalano interamente dalla maturazione dell'anno corrente.
-    // Il debito rimane visibile in "Saldo Anni Prec." e si riflette nel saldo mensile.
-    consumedPrevP  = 0;
-    prevResNetP    = prevRes.permessi; // debito rimane inalterato
-    usedCurrP      = used.permUsed;    // tutto dal pool dell'anno corrente
-    currResP       = +(mat.permessi - usedCurrP).toFixed(2);
-    prevPermGoduti = 0;
-    prevPermPagati = 0;
-  }
+  // Se prevRes.permessi < 0 (debito): non si può consumare da un saldo negativo.
+  // Tutte le ore usate quest'anno scalano dalla maturazione corrente.
+  // Il debito rimane visibile in "Saldo Anni Prec." e scorre nel saldo mensile.
+  const consumedPrevP  = +Math.min(used.permUsed, Math.max(0, prevRes.permessi)).toFixed(2);
+  const prevResNetP    = +(prevRes.permessi - consumedPrevP).toFixed(2);
+  const usedCurrP      = +(used.permUsed - consumedPrevP).toFixed(2);
+  const currResP       = +(mat.permessi - usedCurrP).toFixed(2);
+  const prevPermGoduti = +Math.min(used.permGoduti, consumedPrevP).toFixed(2);
+  const prevPermPagati = +Math.max(0, consumedPrevP - used.permGoduti).toFixed(2);
 
   return {
-    prevFerieMat:   prevRes.ferie,
-    prevFerieUsed:  consumedPrevF,
-    prevFerieRes:   prevResNetF,
-    prevPermMat:    prevRes.permessi,   // può essere negativo (= debito)
-    prevPermUsed:   consumedPrevP,
+    prevFerieMat:    prevRes.ferie,
+    prevFerieUsed:   consumedPrevF,
+    prevFerieRes:    prevResNetF,
+    prevPermMat:     prevRes.permessi,      // può essere negativo (= debito)
+    prevPermUsed:    consumedPrevP,
     prevPermGoduti,
     prevPermPagati,
-    prevPermRes:    prevResNetP,        // può essere negativo (= debito residuo)
-    ferieMat:       mat.ferie,
-    ferieUsed:      usedCurrF,
-    ferieRes:       currResF,
-    permessiMat:    mat.permessi,
-    permessiUsed:   usedCurrP,
-    permessiGoduti: +Math.max(0, used.permGoduti - prevPermGoduti).toFixed(2),
-    permessiPagati: +Math.max(0, used.permPagati - prevPermPagati).toFixed(2),
-    permessiRes:    currResP
+    prevPermRes:     prevResNetP,           // può essere negativo
+    ferieMat:        mat.ferie,
+    ferieUsed:       usedCurrF,
+    ferieRes:        currResF,
+    permessiMat:     mat.permessi,
+    permessiUsed:    usedCurrP,
+    permessiGoduti:  +Math.max(0, used.permGoduti - prevPermGoduti).toFixed(2),
+    permessiPagati:  +Math.max(0, used.permPagati - prevPermPagati).toFixed(2),
+    permessiRes:     currResP
   };
 }
 
@@ -1527,16 +1734,17 @@ function renderSummary(user) {
   document.getElementById('fpRes').textContent  = fmt(t.prevFerieRes,  ' gg');
   document.getElementById('ppMat').textContent    = fmt(t.prevPermMat,     'h');
   document.getElementById('ppRes').textContent    = fmt(t.prevPermRes,     'h');
-
   if (t.prevPermMat < 0) {
-    // Debito da anni prec.: mostra solo il debito, nascondi godute/pagate (non applicabili)
-    document.getElementById('ppMatLabel').textContent  = '⚠️ Debito portato';
-    document.getElementById('ppMat').style.color       = 'var(--danger)';
-    document.getElementById('ppExtraRows').style.display = 'none';
+    // Debito da anni prec.: etichetta rossa, nascondi Godute/Pagate (non applicabili)
+    document.getElementById('ppMatLabel').textContent              = '⚠️ Debito portato';
+    document.getElementById('ppMat').style.color                   = 'var(--danger)';
+    document.getElementById('ppRes').style.color                   = 'var(--danger)';
+    document.getElementById('ppGodutePagateRows').style.display    = 'none';
   } else {
-    document.getElementById('ppMatLabel').textContent  = 'Maturate';
-    document.getElementById('ppMat').style.color       = 'var(--accent-p)';
-    document.getElementById('ppExtraRows').style.display = '';
+    document.getElementById('ppMatLabel').textContent              = 'Maturate';
+    document.getElementById('ppMat').style.color                   = 'var(--accent-p)';
+    document.getElementById('ppRes').style.color                   = 'var(--text)';
+    document.getElementById('ppGodutePagateRows').style.display    = '';
     document.getElementById('ppUsed').textContent   = fmt(t.prevPermGoduti,  'h');
     document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
   }
@@ -2716,8 +2924,7 @@ if ("serviceWorker" in navigator) {
             if (nw.state === "activated") window.location.reload();
           });
         });
-      })
-      .catch(() => {});
+      }).catch(() => {});
   });
 }
 </script>
