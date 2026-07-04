@@ -1362,6 +1362,7 @@ function setupFirebaseAuthListener() {
   const { onAuthStateChanged } = window.firebaseAuthMethods;
   onAuthStateChanged(window.firebaseAuth, async user => {
     if (user) {
+      fbUser = user; // salva subito il riferimento, prima del controllo status
       const status = await checkApprovalStatus(user);
       if (status === 'approved') {
         showScreen('app');
