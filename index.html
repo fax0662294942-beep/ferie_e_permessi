@@ -763,6 +763,44 @@
   </div>
 </div>
 
+<!-- PERMESSI 104 CARD (visibile solo se permesso104Enabled) -->
+<div id="p104Card" style="display:none;margin:0 12px 4px;background:var(--surface2);border:1px solid rgba(251,146,60,.3);border-radius:14px;padding:14px">
+  <div class="section-title" style="color:#fb923c;margin-bottom:10px">♿ Permessi Legge 104</div>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Usati anno</div>
+      <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#fb923c" id="p104UsatiAnno">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Usati mese</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--danger)" id="p104UsatiMese">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Budget/mese</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text2)" id="p104Budget">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- PERMESSI STUDIO CARD (visibile solo se permessoStudioEnabled) -->
+<div id="pStudioCard" style="display:none;margin:0 12px 4px;background:var(--surface2);border:1px solid rgba(34,211,238,.3);border-radius:14px;padding:14px">
+  <div class="section-title" style="color:#22d3ee;margin-bottom:10px">📚 Permessi Studio</div>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Usati anno</div>
+      <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#22d3ee" id="pStudioUsatiAnno">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Residui anno</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-f)" id="pStudioResidui">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Budget/anno</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text2)" id="pStudioBudget">—</div>
+    </div>
+  </div>
+</div>
+
 
 <div class="month-info-bar" id="monthInfoBar" style="flex-direction:column;gap:8px;">
   <div style="display:flex;gap:0;width:100%">
@@ -907,6 +945,28 @@
   </div>
 </div>
 
+<!-- MODALE PERMESSI SPECIALI (104 / Studio) -->
+<div class="modal-overlay" id="specialPermModal">
+  <div class="modal">
+    <div class="modal-title" id="specialPermTitle">♿ Permesso 104</div>
+    <div class="form-group">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-input" id="spData">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ore</label>
+      <input type="number" class="form-input" id="spQty" min="0.25" step="0.25" placeholder="es. 8">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (opzionale)</label>
+      <input type="text" class="form-input" id="spNote">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSpecialPermModal()">Annulla</button>
+      <button class="btn-confirm" id="spConfirmBtn" onclick="saveSpecialPerm()" style="background:#fb923c;color:#000">Registra</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="entryModal">
   <div class="modal">
@@ -1129,6 +1189,10 @@ function loadDb() {
         festivita: defaultFestivita(),
         saldoIniziale: null,
         bancaOreEnabled: false,
+        permesso104Enabled: false,
+        permessoStudioEnabled: false,
+        permesso104Budget: 24,
+        permessoStudioBudget: 150,
         anni: {
           [y-1]: { ferieAnnue: 26, permessiOreAnnui: 100 },
           [y]:   { ferieAnnue: 26, permessiOreAnnui: 100 }
@@ -1786,6 +1850,29 @@ function getMonthSaldo(user, year, month, simMode) {
 //  BANCA ORE
 // ═══════════════════════════════════════════════
 
+// ── PERMESSI SPECIALI (104 e Studio) ──
+// Calcola ore usate per un tipo speciale in un anno
+function getSpecialPermUsed(user, tipo, year) {
+  const siDate = getSaldoInizDate(user);
+  return +(user.entries || []).filter(e => {
+    if (e.tipo !== tipo || e.sim || e.anno !== year) return false;
+    if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
+    return true;
+  }).reduce((s, e) => s + (e.qty || 0), 0).toFixed(2);
+}
+
+// Ore usate nel mese corrente per un tipo speciale
+function getSpecialPermMonth(user, tipo, year, month) {
+  return +(user.entries || []).filter(e =>
+    e.tipo === tipo && !e.sim && e.anno === year && e.mese === month
+  ).reduce((s, e) => s + (e.qty || 0), 0).toFixed(2);
+}
+
+// Budget annuo per Permessi 104 (base mensile × 12)
+function getBudget104Anno(user, year) {
+  return +((user.permesso104Budget || 24) * 12 / 12 * 12).toFixed(2); // budget full year
+}
+
 // Saldo banca ore cumulativo fino a fine del mese/anno specificato
 function getBancaOreSaldo(user, upToYear, upToMonth) {
   const si = user.saldoIniziale;
@@ -1893,7 +1980,7 @@ function renderSummary(user) {
   document.getElementById('pcPagate').textContent = fmt(t.permessiPagati,  'h');
   document.getElementById('pcRes').textContent    = fmt(t.permessiRes,     'h');
 
-  // Banca Ore (solo se abilitata)
+  // Banca Ore
   const boCard = document.getElementById('bancaOreCard');
   if (user.bancaOreEnabled) {
     boCard.style.display = '';
@@ -1902,9 +1989,29 @@ function renderSummary(user) {
     document.getElementById('bancaOreSaldoVal').textContent = fmt(boSaldo, 'h');
     document.getElementById('bancaOreAccMese').textContent  = fmt(boMese.accumulate, 'h');
     document.getElementById('bancaOreFruMese').textContent  = fmt(boMese.fruite, 'h');
-  } else {
-    boCard.style.display = 'none';
-  }
+  } else { boCard.style.display = 'none'; }
+
+  // Permessi 104
+  const p104Card = document.getElementById('p104Card');
+  if (user.permesso104Enabled) {
+    p104Card.style.display = '';
+    const usatiAnno = getSpecialPermUsed(user, 'permesso_104', viewYear);
+    const usatiMese = getSpecialPermMonth(user, 'permesso_104', viewYear, viewMonth);
+    document.getElementById('p104UsatiAnno').textContent = fmt(+usatiAnno, 'h');
+    document.getElementById('p104UsatiMese').textContent = fmt(+usatiMese, 'h');
+    document.getElementById('p104Budget').textContent    = fmt(user.permesso104Budget || 24, 'h');
+  } else { p104Card.style.display = 'none'; }
+
+  // Permessi Studio
+  const pStCard = document.getElementById('pStudioCard');
+  if (user.permessoStudioEnabled) {
+    pStCard.style.display = '';
+    const usatiAnno = getSpecialPermUsed(user, 'permesso_studio', viewYear);
+    const budget    = user.permessoStudioBudget || 150;
+    document.getElementById('pStudioUsatiAnno').textContent = fmt(+usatiAnno, 'h');
+    document.getElementById('pStudioResidui').textContent   = fmt(+(budget - usatiAnno).toFixed(2), 'h');
+    document.getElementById('pStudioBudget').textContent    = fmt(budget, 'h');
+  } else { pStCard.style.display = 'none'; }
 }
 
 function renderMonthInfo(user) {
@@ -1929,8 +2036,11 @@ function renderActionRow() {
   const simMode = currentTab === 'simulazione';
   const user = currentUser();
   const bancaBtn = user.bancaOreEnabled
-    ? `<button class="action-btn" onclick="openBancaOreModal()" style="background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);flex-basis:100%">⏱ Banca Ore</button>`
-    : '';
+    ? `<button class="action-btn" onclick="openBancaOreModal()" style="background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);flex-basis:100%">⏱ Banca Ore</button>` : '';
+  const p104Btn = user.permesso104Enabled
+    ? `<button class="action-btn" onclick="openSpecialPermModal('permesso_104')" style="background:rgba(251,146,60,.12);color:#fb923c;border:1px solid rgba(251,146,60,.3);flex-basis:100%">♿ Permesso 104</button>` : '';
+  const studioBtn = user.permessoStudioEnabled
+    ? `<button class="action-btn" onclick="openSpecialPermModal('permesso_studio')" style="background:rgba(34,211,238,.12);color:#22d3ee;border:1px solid rgba(34,211,238,.3);flex-basis:100%">📚 Permesso Studio</button>` : '';
   if (simMode) {
     ar.innerHTML = `
       <button class="action-btn sim-btn" onclick="openEntryModal('ferie')">🔮 Simula Ferie</button>
@@ -1940,7 +2050,7 @@ function renderActionRow() {
       <button class="action-btn ferie-btn" onclick="openEntryModal('ferie')">🌴 Inserisci Ferie</button>
       <button class="action-btn permesso-btn" onclick="openEntryModal('permesso')">🕐 Inserisci Permesso</button>
       <button class="action-btn" onclick="openLiquidaModal()" style="background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);flex-basis:100%">💰 Liquida Permessi</button>
-      ${bancaBtn}`;
+      ${bancaBtn}${p104Btn}${studioBtn}`;
   }
 }
 
@@ -1979,20 +2089,32 @@ function renderEntries(user) {
   function renderEntryCard(e, forceReadonly) {
     const isSim = e.sim;
     const isPagato = e.tipo === 'permesso_pagato';
+    const isBancaAcc = e.tipo === 'banca_accumulo';
+    const isBancaFru = e.tipo === 'banca_fruizione';
+    const is104   = e.tipo === 'permesso_104';
+    const isStudio = e.tipo === 'permesso_studio';
+    const isSpecial = isPagato || isBancaAcc || isBancaFru || is104 || isStudio;
     const dates = (e.dateTo && e.dateTo !== e.dateFrom) ? `${e.dateFrom} → ${e.dateTo}` : (e.dateFrom || '');
     let cls, icon, cardType;
-    if (isSim)             { cls = 's'; icon = '🔮'; cardType = 'sim'; }
-    else if (e.tipo === 'ferie')    { cls = 'f'; icon = '🌴'; cardType = 'ferie'; }
-    else if (isPagato)     { cls = 's'; icon = '💰'; cardType = 'permesso'; }
-    else                   { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
+    if (isSim)                                        { cls = 's'; icon = '🔮'; cardType = 'sim'; }
+    else if (e.tipo === 'ferie')                      { cls = 'f'; icon = '🌴'; cardType = 'ferie'; }
+    else if (isPagato)                                { cls = 's'; icon = '💰'; cardType = 'permesso'; }
+    else if (is104)                                   { cls = ''; icon = '♿'; cardType = 'permesso'; }
+    else if (isStudio)                                { cls = ''; icon = '📚'; cardType = 'permesso'; }
+    else if (isBancaAcc)                              { cls = ''; icon = '⏱+'; cardType = 'permesso'; }
+    else if (isBancaFru)                              { cls = ''; icon = '⏱−'; cardType = 'permesso'; }
+    else                                              { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
 
     const qty = e.tipo === 'ferie' ? fmt(e.qty * calcMode, ' gg') : fmt(e.qty, 'h');
-    const readonly = forceReadonly || (!isSim && simMode) || isPagato;
+    const readonly = forceReadonly || (!isSim && simMode) || isSpecial;
     const badge = (!isSim && simMode) ? '<span style="font-size:9px;background:rgba(255,255,255,.07);color:var(--text3);padding:1px 5px;border-radius:8px;margin-left:4px">ufficiale</span>' : '';
     const obbBadge = e.obbligata ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">🏢 obbligata</span>' : '';
     const pagatoBadge = isPagato ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">💰 liquidato</span>' : '';
+    const is104Badge  = is104   ? '<span style="font-size:9px;background:rgba(251,146,60,.15);color:#fb923c;padding:1px 5px;border-radius:8px;margin-left:4px">L.104</span>' : '';
+    const studiobadge = isStudio ? '<span style="font-size:9px;background:rgba(34,211,238,.15);color:#22d3ee;padding:1px 5px;border-radius:8px;margin-left:4px">Studio</span>' : '';
+    const bancaBadge = (isBancaAcc||isBancaFru) ? `<span style="font-size:9px;background:rgba(167,139,250,.15);color:#a78bfa;padding:1px 5px;border-radius:8px;margin-left:4px">${isBancaAcc?'accumulo':'fruizione'}</span>` : '';
     let actions = '';
-    const obbToggle = (readonly || isPagato) ? '' :
+    const obbToggle = (readonly || isSpecial) ? '' :
       `<span class="entry-confirm" style="background:${e.obbligata?'rgba(245,158,11,.25)':'rgba(255,255,255,.06)'};color:${e.obbligata?'var(--accent-sim)':'var(--text3)'};border-color:${e.obbligata?'rgba(245,158,11,.4)':'var(--border)'}" onclick="toggleObbligata('${e.id}')" title="Segna come obbligata/chiusura aziendale">🏢</span>`;
     if (readonly && !isPagato) {
       actions = '<span style="width:20px"></span>';
@@ -2003,13 +2125,14 @@ function renderEntries(user) {
     } else {
       actions = obbToggle + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     }
-    const titleText = e.note || (e.tipo==='ferie' ? 'Ferie' : isPagato ? 'Permessi liquidati' : 'Permesso');
+    const titleText = e.note || (e.tipo==='ferie' ? 'Ferie' : isPagato ? 'Permessi liquidati' : is104 ? 'Permesso L.104' : isStudio ? 'Permesso Studio' : isBancaAcc ? 'Banca Ore accumulo' : isBancaFru ? 'Banca Ore fruizione' : 'Permesso');
+    const allBadges = badge + obbBadge + pagatoBadge + is104Badge + studiobadge + bancaBadge;
     return `
       <div class="entry-card tipo-${cardType}" style="${readonly && simMode ? 'opacity:0.65' : ''}${isPagato ? 'border-left-color:var(--accent-sim)' : ''}">
         <div class="entry-inner">
           <div class="entry-icon ${cls}">${icon}</div>
           <div class="entry-body">
-            <div class="entry-title"><span class="entry-title-text">${titleText}</span><span class="entry-title-badges">${badge}${obbBadge}${pagatoBadge}</span></div>
+            <div class="entry-title"><span class="entry-title-text">${titleText}</span><span class="entry-title-badges">${allBadges}</span></div>
             <div class="entry-sub">${dates}</div>
           </div>
           <div class="entry-right">
@@ -2026,6 +2149,9 @@ function renderEntries(user) {
   const offFerie  = toShow.filter(e => !e.sim && e.tipo === 'ferie');
   const offPerm   = toShow.filter(e => !e.sim && e.tipo === 'permesso');
   const offPagati = toShow.filter(e => !e.sim && e.tipo === 'permesso_pagato');
+  const off104    = toShow.filter(e => !e.sim && e.tipo === 'permesso_104');
+  const offStudio = toShow.filter(e => !e.sim && e.tipo === 'permesso_studio');
+  const offBanca  = toShow.filter(e => !e.sim && (e.tipo === 'banca_accumulo' || e.tipo === 'banca_fruizione'));
   const simFerie  = toShow.filter(e =>  e.sim && e.tipo === 'ferie');
   const simPerm   = toShow.filter(e =>  e.sim && e.tipo === 'permesso');
 
@@ -2040,6 +2166,21 @@ function renderEntries(user) {
   if (offPagati.length) {
     html += `<div class="entries-section-label" style="color:var(--accent-sim)">💰 Permessi Liquidati</div>`;
     offPagati.forEach(e => { html += renderEntryCard(e, false); });
+  }
+
+  if (off104.length) {
+    html += `<div class="entries-section-label" style="color:#fb923c">♿ Permessi Legge 104</div>`;
+    off104.forEach(e => { html += renderEntryCard(e, false); });
+  }
+
+  if (offStudio.length) {
+    html += `<div class="entries-section-label" style="color:#22d3ee">📚 Permessi Studio</div>`;
+    offStudio.forEach(e => { html += renderEntryCard(e, false); });
+  }
+
+  if (offBanca.length) {
+    html += `<div class="entries-section-label" style="color:#a78bfa">⏱ Banca Ore</div>`;
+    offBanca.forEach(e => { html += renderEntryCard(e, false); });
   }
 
   if (simFerie.length || simPerm.length) {
@@ -2337,6 +2478,46 @@ function saveBancaOre() {
   saveDb(); closeBancaOreModal(); renderAll();
   showToast(tipo === 'banca_accumulo' ? `⏱ +${qty}h aggiunte alla banca` : `⏱ -${qty}h usate dalla banca`);
 }
+
+// ── PERMESSI SPECIALI (104 / Studio) ──
+let _specialPermTipo = 'permesso_104';
+
+function openSpecialPermModal(tipo) {
+  _specialPermTipo = tipo;
+  const is104 = tipo === 'permesso_104';
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('specialPermTitle').textContent = is104 ? '♿ Permesso 104' : '📚 Permesso Studio';
+  document.getElementById('spConfirmBtn').style.background = is104 ? '#fb923c' : '#22d3ee';
+  document.getElementById('spData').value = `${viewYear}-${pad(viewMonth)}-01`;
+  document.getElementById('spQty').value  = '';
+  document.getElementById('spNote').value = '';
+  document.getElementById('specialPermModal').classList.add('open');
+}
+
+function closeSpecialPermModal() {
+  document.getElementById('specialPermModal').classList.remove('open');
+}
+
+function saveSpecialPerm() {
+  const user = currentUser();
+  const data = document.getElementById('spData').value;
+  const qty  = parseFloat(document.getElementById('spQty').value);
+  const note = document.getElementById('spNote').value.trim();
+  if (!data || !qty || qty <= 0) { showToast('Inserisci data e ore valide'); return; }
+  const d = new Date(data + 'T00:00:00');
+  const mese = d.getMonth() + 1;
+  const anno = d.getFullYear();
+  const is104 = _specialPermTipo === 'permesso_104';
+  if (!user.entries) user.entries = [];
+  user.entries.push({
+    id: genId(), tipo: _specialPermTipo, dateFrom: data, dateTo: data,
+    qty, note: note || (is104 ? 'Permesso L.104' : 'Permesso Studio'),
+    mese, anno, sim: false, obbligata: false
+  });
+  saveDb(); closeSpecialPermModal(); renderAll();
+  showToast(`${is104 ? '♿' : '📚'} ${qty}h registrate`);
+}
+
 function toggleObbligata(id) {
   const user = currentUser();
   const e = (user.entries || []).find(e => e.id === id);
@@ -2417,6 +2598,10 @@ function addUser() {
     festivita: defaultFestivita(),
     saldoIniziale: null,
     bancaOreEnabled: false,
+    permesso104Enabled: false,
+    permessoStudioEnabled: false,
+    permesso104Budget: 24,
+    permessoStudioBudget: 150,
     anni: anniObj,
     entries: []
   });
@@ -2512,17 +2697,47 @@ function renderSettingsContent() {
   <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
     <div class="anno-config-title" style="color:#a78bfa">⏱ Banca Ore</div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
-      Abilita il tracciamento delle ore extra lavorate e del relativo riposo compensativo. Se non ti serve, lascia disabilitato — la schermata principale rimane invariata.
+      Abilita il tracciamento delle ore extra lavorate e del relativo riposo compensativo. Se non ti serve, lascia disabilitato.
     </div>
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2)">
       <input type="checkbox" ${user.bancaOreEnabled?'checked':''} onchange="toggleBancaOre(this.checked)" style="width:18px;height:18px;accent-color:#a78bfa;cursor:pointer">
       <span>${user.bancaOreEnabled ? '✅ Banca Ore abilitata' : 'Abilita Banca Ore'}</span>
     </label>
   </div>
-  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(251,146,60,.3)">
+    <div class="anno-config-title" style="color:#fb923c">♿ Permessi Legge 104</div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
-      Determina quali giorni vengono esclusi dal calcolo automatico dei giorni di ferie in un intervallo.
+      Permessi per assistenza a persone con disabilità. Non hanno maturazione automatica — registri le ore man mano che le usi.
     </div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2);margin-bottom:${user.permesso104Enabled?'10px':'0'}">
+      <input type="checkbox" ${user.permesso104Enabled?'checked':''} onchange="togglePermesso104(this.checked)" style="width:18px;height:18px;accent-color:#fb923c;cursor:pointer">
+      <span>${user.permesso104Enabled ? '✅ Permessi 104 abilitati' : 'Abilita Permessi 104'}</span>
+    </label>
+    ${user.permesso104Enabled ? `
+    <div class="form-group" style="margin-top:8px">
+      <span class="config-label" style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Budget mensile (h)</span>
+      <input type="number" class="config-input" value="${user.permesso104Budget||24}" min="1" step="0.5" onchange="updatePermesso104Budget(this.value)" style="margin-top:4px">
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">Default 24h/mese (3 giorni × 8h)</div>
+    </div>` : ''}
+  </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(34,211,238,.3)">
+    <div class="anno-config-title" style="color:#22d3ee">📚 Permessi Studio</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      Permessi per motivi di studio. Budget annuo fisso, non hanno maturazione mensile.
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2);margin-bottom:${user.permessoStudioEnabled?'10px':'0'}">
+      <input type="checkbox" ${user.permessoStudioEnabled?'checked':''} onchange="togglePermessoStudio(this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;cursor:pointer">
+      <span>${user.permessoStudioEnabled ? '✅ Permessi Studio abilitati' : 'Abilita Permessi Studio'}</span>
+    </label>
+    ${user.permessoStudioEnabled ? `
+    <div class="form-group" style="margin-top:8px">
+      <span class="config-label" style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Budget annuo (h)</span>
+      <input type="number" class="config-input" value="${user.permessoStudioBudget||150}" min="1" step="1" onchange="updatePermessoStudioBudget(this.value)" style="margin-top:4px">
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">Default 150h/anno</div>
+    </div>` : ''}
+  </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
+    <div class="anno-config-title" style="color:#a78bfa">📆 Giorni Lavorativi & Festività</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
         <input type="checkbox" ${wc.escludiSabato?'checked':''} onchange="toggleWorkdayFlag('escludiSabato',this.checked)" style="width:17px;height:17px;accent-color:#a78bfa;cursor:pointer">
@@ -2649,6 +2864,32 @@ function toggleBancaOre(val) {
   user.bancaOreEnabled = val;
   saveDb(); renderAll(); renderSettingsContent();
   showToast(val ? '⏱ Banca Ore abilitata' : '⏱ Banca Ore disabilitata');
+}
+
+function togglePermesso104(val) {
+  const user = currentUser();
+  user.permesso104Enabled = val;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast(val ? '♿ Permessi 104 abilitati' : '♿ Permessi 104 disabilitati');
+}
+
+function togglePermessoStudio(val) {
+  const user = currentUser();
+  user.permessoStudioEnabled = val;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast(val ? '📚 Permessi Studio abilitati' : '📚 Permessi Studio disabilitati');
+}
+
+function updatePermesso104Budget(val) {
+  const user = currentUser();
+  user.permesso104Budget = parseFloat(val) || 24;
+  saveDb(); renderAll();
+}
+
+function updatePermessoStudioBudget(val) {
+  const user = currentUser();
+  user.permessoStudioBudget = parseFloat(val) || 150;
+  saveDb(); renderAll();
 }
 
 function toggleWorkdayFlag(field, val) {
@@ -3163,7 +3404,7 @@ function hideCalTip() {
     if (e.target === this) this.classList.remove('open');
   });
 });
-['entryModal','monthPickerModal','liquidaModal','bancaOreModal'].forEach(id => {
+['entryModal','monthPickerModal','liquidaModal','bancaOreModal','specialPermModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('open');
   });
@@ -3195,8 +3436,7 @@ if ("serviceWorker" in navigator) {
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
-      .then(reg => { reg.update(); reg.addEventListener("updatefound", () => { const nw = reg.installing; nw.addEventListener("statechange", () => { if (nw.state === "activated") window.location.reload(); }); }); }).catch(() => {});
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => { reg.update(); reg.addEventListener("updatefound", () => { const nw = reg.installing; nw.addEventListener("statechange", () => { if (nw.state === "activated") window.location.reload(); }); }); }).catch(() => {});
   });
 }
 </script>
