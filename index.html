@@ -11,6 +11,8 @@
 <title>Ferie & Permessi</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192x192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192x192.png">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
@@ -742,7 +744,26 @@
   </div>
 </div>
 
-<!-- PROGRESSIVO + MATURAZIONE + UTILIZZO MESE -->
+<!-- BANCA ORE CARD (visibile solo se bancaOreEnabled) -->
+<div id="bancaOreCard" style="display:none;margin:0 12px 4px;background:var(--surface2);border:1px solid rgba(167,139,250,.3);border-radius:14px;padding:14px">
+  <div class="section-title" style="color:#a78bfa;margin-bottom:10px">⏱ Banca Ore</div>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Saldo totale</div>
+      <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:#a78bfa" id="bancaOreSaldoVal">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Accumulate mese</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-f)" id="bancaOreAccMese">—</div>
+    </div>
+    <div style="flex:1;text-align:center">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Fruite mese</div>
+      <div style="font-size:16px;font-weight:700;font-family:'DM Mono',monospace;color:var(--danger)" id="bancaOreFruMese">—</div>
+    </div>
+  </div>
+</div>
+
+
 <div class="month-info-bar" id="monthInfoBar" style="flex-direction:column;gap:8px;">
   <div style="display:flex;gap:0;width:100%">
     <div class="month-mat-item">
@@ -856,7 +877,37 @@
   </div>
 </div>
 
-<!-- Entry Modal -->
+<!-- MODALE BANCA ORE -->
+<div class="modal-overlay" id="bancaOreModal">
+  <div class="modal">
+    <div class="modal-title" style="color:#a78bfa">⏱ Banca Ore</div>
+    <div class="form-group">
+      <label class="form-label">Tipo movimento</label>
+      <select class="form-input" id="bancaOreTipo">
+        <option value="banca_accumulo">➕ Accumulo (ore fatte in più)</option>
+        <option value="banca_fruizione">➖ Fruizione (ore usate come riposo)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-input" id="bancaOreData">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ore</label>
+      <input type="number" class="form-input" id="bancaOreQty" min="0.25" step="0.25" placeholder="es. 2.5">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note (opzionale)</label>
+      <input type="text" class="form-input" id="bancaOreNote" placeholder="es. Riunione straordinaria">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeBancaOreModal()">Annulla</button>
+      <button class="btn-confirm" onclick="saveBancaOre()" style="background:#a78bfa;color:#000">⏱ Registra</button>
+    </div>
+  </div>
+</div>
+
+
 <div class="modal-overlay" id="entryModal">
   <div class="modal">
     <div class="modal-title" id="entryModalTitle">Inserisci Ferie</div>
@@ -1076,6 +1127,8 @@ function loadDb() {
         permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
         workdayConfig: { escludiSabato: true, escludiDomenica: true },
         festivita: defaultFestivita(),
+        saldoIniziale: null,
+        bancaOreEnabled: false,
         anni: {
           [y-1]: { ferieAnnue: 26, permessiOreAnnui: 100 },
           [y]:   { ferieAnnue: 26, permessiOreAnnui: 100 }
@@ -1462,6 +1515,13 @@ function getPermessiOrePerMese(user, year, month) {
 
 // Maturazione annua totale per un dato anno
 // Per i permessi somma mese per mese perché lo scaglione può cambiare
+// Helper: data di inizio tracciamento (saldoIniziale.data o null)
+function getSaldoInizDate(user) {
+  return (user.saldoIniziale && user.saldoIniziale.data)
+    ? new Date(user.saldoIniziale.data + 'T00:00:00')
+    : null;
+}
+
 function getAnnualMat(user, year) {
   const cfg  = getAnnoCfg(user, String(year));
   const today = new Date();
@@ -1470,6 +1530,13 @@ function getAnnualMat(user, year) {
     const d = new Date(user.dataInizioContratto);
     if (d.getFullYear() > year) return { ferie: 0, permessi: 0 };
     if (d.getFullYear() === year) meseInizio = d.getMonth() + 1;
+  }
+  // Saldo iniziale: la maturazione parte da questa data (tutto il prima è già incluso nel saldo)
+  const siDate = getSaldoInizDate(user);
+  if (siDate) {
+    const siYear = siDate.getFullYear();
+    if (siYear > year) return { ferie: 0, permessi: 0 };
+    if (siYear === year) meseInizio = Math.max(meseInizio, siDate.getMonth() + 1);
   }
   let meseFine;
   if (year < today.getFullYear()) meseFine = 12;
@@ -1480,7 +1547,6 @@ function getAnnualMat(user, year) {
   const mesiLav = meseFine - meseInizio + 1;
   const ferieAnnua = +((cfg.ferieAnnue || 0) / 12 * mesiLav).toFixed(2);
 
-  // permessi: somma mese per mese per gestire cambio scaglione
   let permTot = 0;
   for (let m = meseInizio; m <= meseFine; m++) {
     permTot += getPermessiOrePerMese(user, year, m);
@@ -1493,10 +1559,15 @@ function getMonthMat(user, year, month) {
   const cfg = getAnnoCfg(user, String(year));
   if (user.dataInizioContratto) {
     const d = new Date(user.dataInizioContratto);
-    const annoInizio = d.getFullYear();
-    const meseInizio = d.getMonth() + 1;
-    if (year < annoInizio) return { ferie: 0, permessi: 0 };
-    if (year === annoInizio && month < meseInizio) return { ferie: 0, permessi: 0 };
+    if (year < d.getFullYear()) return { ferie: 0, permessi: 0 };
+    if (year === d.getFullYear() && month < d.getMonth() + 1) return { ferie: 0, permessi: 0 };
+  }
+  // Saldo iniziale: mese precedente alla data = nessuna maturazione (già inclusa nel saldo)
+  const siDate = getSaldoInizDate(user);
+  if (siDate) {
+    const siYear = siDate.getFullYear(), siMonth = siDate.getMonth() + 1;
+    if (year < siYear) return { ferie: 0, permessi: 0 };
+    if (year === siYear && month < siMonth) return { ferie: 0, permessi: 0 };
   }
   return {
     ferie:    +((cfg.ferieAnnue || 0) / 12).toFixed(4),
@@ -1511,9 +1582,14 @@ function getMonthMat(user, year, month) {
 // permConsumed = goduti + pagati (usato per il calcolo del residuo)
 function getYearUsed(user, year, simMode) {
   const calcMode = parseFloat(user.calcMode || '1');
-  const entries = (user.entries || []).filter(e =>
-    e.anno === year && (simMode ? true : !e.sim)
-  );
+  const siDate = getSaldoInizDate(user);
+  const entries = (user.entries || []).filter(e => {
+    if (e.anno !== year) return false;
+    if (!simMode && e.sim) return false;
+    // Ignora voci prima del saldo iniziale (già contabilizzate nel saldo)
+    if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
+    return true;
+  });
   let ferieRaw = 0, ferieEff = 0, permGoduti = 0, permPagati = 0;
   entries.forEach(e => {
     if (e.tipo === 'ferie') {
@@ -1524,11 +1600,11 @@ function getYearUsed(user, year, simMode) {
     if (e.tipo === 'permesso_pagato') permPagati += (e.qty || 0);
   });
   return {
-    ferieRaw:      +ferieRaw.toFixed(2),
-    ferieUsed:     +ferieEff.toFixed(2),
-    permGoduti:    +permGoduti.toFixed(2),
-    permPagati:    +permPagati.toFixed(2),
-    permUsed:      +(permGoduti + permPagati).toFixed(2)  // totale consumato (per residuo)
+    ferieRaw:  +ferieRaw.toFixed(2),
+    ferieUsed: +ferieEff.toFixed(2),
+    permGoduti: +permGoduti.toFixed(2),
+    permPagati: +permPagati.toFixed(2),
+    permUsed:   +(permGoduti + permPagati).toFixed(2)
   };
 }
 
@@ -1540,11 +1616,29 @@ function getYearUsed(user, year, simMode) {
  * Usa SEMPRE e solo voci ufficiali (mai simulate) per la storia pregressa.
  */
 function getResiduoAnniPrecedenti(user, year) {
-  // L'anno di partenza è il minore tra:
-  // - il primo anno esplicitamente in user.anni (dati inseriti)
-  // - l'anno di assunzione (dataInizioContratto)
-  // Questo garantisce che i permessi maturati dal primo giorno vengano conteggiati
-  // anche se user.anni non include l'anno di assunzione.
+  // Se è impostato un saldo iniziale, usa quello come punto di partenza
+  if (user.saldoIniziale && user.saldoIniziale.data) {
+    const si = user.saldoIniziale;
+    const siYear = new Date(si.data + 'T00:00:00').getFullYear();
+
+    if (year <= siYear) {
+      // Anni precedenti o uguale: restituiamo il saldo iniziale come punto fisso
+      return { ferie: si.ferie || 0, permessi: si.permessi || 0 };
+    }
+
+    // Accumula a partire dal saldo iniziale
+    let residuoFerie = si.ferie || 0;
+    let residuoPerm  = si.permessi || 0;
+    for (let y = siYear; y < year; y++) {
+      const mat  = getAnnualMat(user, y);   // già rispetta siDate per meseInizio
+      const used = getYearUsed(user, y, false); // già filtra voci prima di siDate
+      residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
+      residuoPerm  = +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2);
+    }
+    return { ferie: residuoFerie, permessi: residuoPerm };
+  }
+
+  // Altrimenti: logica esistente (usa dataInizioContratto e anni configurati)
   const configuredYears = Object.keys(user.anni || {}).map(Number).filter(y => y < year);
   let startYear = configuredYears.length ? Math.min(...configuredYears) : year;
   if (user.dataInizioContratto) {
@@ -1556,11 +1650,9 @@ function getResiduoAnniPrecedenti(user, year) {
   let residuoFerie = 0, residuoPerm = 0;
   for (let y = startYear; y < year; y++) {
     const mat  = getAnnualMat(user, y);
-    const used = getYearUsed(user, y, false); // solo ufficiali, storia consolidata
-    // Ferie: Math.max(0) perché le ferie non possono essere "in debito" tra anni
+    const used = getYearUsed(user, y, false);
     residuoFerie = Math.max(0, +(residuoFerie + mat.ferie    - used.ferieUsed).toFixed(2));
-    // Permessi: non azzerare mai automaticamente (il saldo accumula finché non si liquida)
-    residuoPerm  = +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2); // NO azzeramento: il debito si porta avanti
+    residuoPerm  = +(residuoPerm  + mat.permessi - used.permUsed).toFixed(2);
   }
   return { ferie: residuoFerie, permessi: residuoPerm };
 }
@@ -1627,9 +1719,13 @@ function getYearTotals(user, year, simMode) {
 // Utilizzate nel mese corrente visualizzato
 function getMonthUsed(user, year, month, simMode) {
   const calcMode = parseFloat(user.calcMode || '1');
-  const entries = (user.entries || []).filter(e =>
-    e.anno === year && e.mese === month && (simMode ? true : !e.sim)
-  );
+  const siDate = getSaldoInizDate(user);
+  const entries = (user.entries || []).filter(e => {
+    if (e.anno !== year || e.mese !== month) return false;
+    if (!simMode && e.sim) return false;
+    if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
+    return true;
+  });
   let ferieRaw = 0, ferieEff = 0, permGoduti = 0, permPagati = 0;
   entries.forEach(e => {
     if (e.tipo === 'ferie') {
@@ -1687,7 +1783,46 @@ function getMonthSaldo(user, year, month, simMode) {
 
 
 // ═══════════════════════════════════════════════
-//  FORMAT
+//  BANCA ORE
+// ═══════════════════════════════════════════════
+
+// Saldo banca ore cumulativo fino a fine del mese/anno specificato
+function getBancaOreSaldo(user, upToYear, upToMonth) {
+  const si = user.saldoIniziale;
+  let saldo = (si && si.bancaOre != null) ? (si.bancaOre || 0) : 0;
+  const siDate = getSaldoInizDate(user);
+  (user.entries || []).filter(e => {
+    if (e.sim) return false;
+    if (e.tipo !== 'banca_accumulo' && e.tipo !== 'banca_fruizione') return false;
+    if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
+    if (e.anno > upToYear) return false;
+    if (e.anno === upToYear && e.mese > upToMonth) return false;
+    return true;
+  }).forEach(e => {
+    if (e.tipo === 'banca_accumulo') saldo += (e.qty || 0);
+    if (e.tipo === 'banca_fruizione') saldo -= (e.qty || 0);
+  });
+  return +saldo.toFixed(2);
+}
+
+// Movimenti banca ore nel mese corrente
+function getBancaOreMonth(user, year, month) {
+  const siDate = getSaldoInizDate(user);
+  const entries = (user.entries || []).filter(e => {
+    if (e.anno !== year || e.mese !== month || e.sim) return false;
+    if (e.tipo !== 'banca_accumulo' && e.tipo !== 'banca_fruizione') return false;
+    if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
+    return true;
+  });
+  let accumulate = 0, fruite = 0;
+  entries.forEach(e => {
+    if (e.tipo === 'banca_accumulo') accumulate += (e.qty || 0);
+    if (e.tipo === 'banca_fruizione') fruite     += (e.qty || 0);
+  });
+  return { accumulate: +accumulate.toFixed(2), fruite: +fruite.toFixed(2) };
+}
+
+
 // ═══════════════════════════════════════════════
 function fmt(n, unit) {
   if (n === undefined || n === null || isNaN(n)) return '—';
@@ -1757,6 +1892,19 @@ function renderSummary(user) {
   document.getElementById('pcUsed').textContent   = fmt(t.permessiGoduti,  'h');
   document.getElementById('pcPagate').textContent = fmt(t.permessiPagati,  'h');
   document.getElementById('pcRes').textContent    = fmt(t.permessiRes,     'h');
+
+  // Banca Ore (solo se abilitata)
+  const boCard = document.getElementById('bancaOreCard');
+  if (user.bancaOreEnabled) {
+    boCard.style.display = '';
+    const boSaldo = getBancaOreSaldo(user, viewYear, viewMonth);
+    const boMese  = getBancaOreMonth(user, viewYear, viewMonth);
+    document.getElementById('bancaOreSaldoVal').textContent = fmt(boSaldo, 'h');
+    document.getElementById('bancaOreAccMese').textContent  = fmt(boMese.accumulate, 'h');
+    document.getElementById('bancaOreFruMese').textContent  = fmt(boMese.fruite, 'h');
+  } else {
+    boCard.style.display = 'none';
+  }
 }
 
 function renderMonthInfo(user) {
@@ -1779,6 +1927,10 @@ function renderMonthInfo(user) {
 function renderActionRow() {
   const ar = document.getElementById('actionRow');
   const simMode = currentTab === 'simulazione';
+  const user = currentUser();
+  const bancaBtn = user.bancaOreEnabled
+    ? `<button class="action-btn" onclick="openBancaOreModal()" style="background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.3);flex-basis:100%">⏱ Banca Ore</button>`
+    : '';
   if (simMode) {
     ar.innerHTML = `
       <button class="action-btn sim-btn" onclick="openEntryModal('ferie')">🔮 Simula Ferie</button>
@@ -1787,7 +1939,8 @@ function renderActionRow() {
     ar.innerHTML = `
       <button class="action-btn ferie-btn" onclick="openEntryModal('ferie')">🌴 Inserisci Ferie</button>
       <button class="action-btn permesso-btn" onclick="openEntryModal('permesso')">🕐 Inserisci Permesso</button>
-      <button class="action-btn" onclick="openLiquidaModal()" style="background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);flex-basis:100%">💰 Liquida Permessi</button>`;
+      <button class="action-btn" onclick="openLiquidaModal()" style="background:rgba(245,158,11,.12);color:var(--accent-sim);border:1px solid rgba(245,158,11,.3);flex-basis:100%">💰 Liquida Permessi</button>
+      ${bancaBtn}`;
   }
 }
 
@@ -2148,6 +2301,42 @@ function saveLiquidazione() {
   showToast(`💰 ${qty}h permessi liquidati in ${MONTHS[mese-1]} ${anno}`);
 }
 
+// ── BANCA ORE MODALE ──
+function openBancaOreModal() {
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('bancaOreData').value = `${viewYear}-${pad(viewMonth)}-01`;
+  document.getElementById('bancaOreQty').value  = '';
+  document.getElementById('bancaOreNote').value = '';
+  document.getElementById('bancaOreTipo').value = 'banca_accumulo';
+  document.getElementById('bancaOreModal').classList.add('open');
+}
+
+function closeBancaOreModal() {
+  document.getElementById('bancaOreModal').classList.remove('open');
+}
+
+function saveBancaOre() {
+  const user  = currentUser();
+  const tipo  = document.getElementById('bancaOreTipo').value;
+  const data  = document.getElementById('bancaOreData').value;
+  const qty   = parseFloat(document.getElementById('bancaOreQty').value);
+  const note  = document.getElementById('bancaOreNote').value.trim();
+
+  if (!data || !qty || qty <= 0) { showToast('Inserisci data e ore valide'); return; }
+
+  const d = new Date(data + 'T00:00:00');
+  const mese = d.getMonth() + 1;
+  const anno = d.getFullYear();
+
+  if (!user.entries) user.entries = [];
+  user.entries.push({
+    id: genId(), tipo, dateFrom: data, dateTo: data,
+    qty, note: note || (tipo === 'banca_accumulo' ? 'Ore accumulate' : 'Ore fruite'),
+    mese, anno, sim: false, obbligata: false
+  });
+  saveDb(); closeBancaOreModal(); renderAll();
+  showToast(tipo === 'banca_accumulo' ? `⏱ +${qty}h aggiunte alla banca` : `⏱ -${qty}h usate dalla banca`);
+}
 function toggleObbligata(id) {
   const user = currentUser();
   const e = (user.entries || []).find(e => e.id === id);
@@ -2226,6 +2415,8 @@ function addUser() {
     permessiCCNL: { anni02: 32, anni24: 68, anni5plus: 104 },
     workdayConfig: { escludiSabato: true, escludiDomenica: true },
     festivita: defaultFestivita(),
+    saldoIniziale: null,
+    bancaOreEnabled: false,
     anni: anniObj,
     entries: []
   });
@@ -2287,8 +2478,48 @@ function renderSettingsContent() {
       Imposta la data di assunzione per il calcolo proporzionale delle maturazioni
     </div>
   </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(96,165,250,.3)">
+    <div class="anno-config-title" style="color:var(--accent-p)">📥 Saldo Iniziale</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      Se inizi a usare l'app con uno storico già esistente, inserisci qui i saldi di partenza.<br>
+      Il calcolo ignorerà tutto ciò che è precedente a questa data.
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <span class="config-label" style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Data di riferimento</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+        <input type="date" class="config-input" id="siDataInput" style="flex:1" value="${user.saldoIniziale && user.saldoIniziale.data ? user.saldoIniziale.data : ''}">
+        <button onclick="saveSaldoIniziale()" style="padding:6px 10px;background:var(--accent-p);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">Salva</button>
+        ${user.saldoIniziale && user.saldoIniziale.data ? `<button onclick="clearSaldoIniziale()" style="padding:6px 10px;background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:12px;cursor:pointer">🗑</button>` : ''}
+      </div>
+    </div>
+    ${user.saldoIniziale && user.saldoIniziale.data ? `
+    <div class="config-row">
+      <div class="form-group">
+        <span class="config-label">Ferie residue (gg)</span>
+        <input type="number" class="config-input" id="siFerieInput" value="${user.saldoIniziale.ferie || 0}" step="0.01" onchange="saveSaldoInizialeField('ferie',this.value)">
+      </div>
+      <div class="form-group">
+        <span class="config-label">Permessi residui (h)</span>
+        <input type="number" class="config-input" id="siPermInput" value="${user.saldoIniziale.permessi || 0}" step="0.25" onchange="saveSaldoInizialeField('permessi',this.value)">
+      </div>
+    </div>
+    ${user.bancaOreEnabled ? `
+    <div class="form-group" style="margin-top:6px">
+      <span class="config-label">Banca Ore residua (h)</span>
+      <input type="number" class="config-input" id="siBancaInput" value="${user.saldoIniziale.bancaOre || 0}" step="0.25" onchange="saveSaldoInizialeField('bancaOre',this.value)">
+    </div>` : ''}` : '<div style="font-size:11px;color:var(--text3)">Imposta prima la data di riferimento.</div>'}
+  </div>
   <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
-    <div class="anno-config-title" style="color:#a78bfa">📆 Giorni Lavorativi & Festività</div>
+    <div class="anno-config-title" style="color:#a78bfa">⏱ Banca Ore</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      Abilita il tracciamento delle ore extra lavorate e del relativo riposo compensativo. Se non ti serve, lascia disabilitato — la schermata principale rimane invariata.
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text2)">
+      <input type="checkbox" ${user.bancaOreEnabled?'checked':''} onchange="toggleBancaOre(this.checked)" style="width:18px;height:18px;accent-color:#a78bfa;cursor:pointer">
+      <span>${user.bancaOreEnabled ? '✅ Banca Ore abilitata' : 'Abilita Banca Ore'}</span>
+    </label>
+  </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(167,139,250,.3)">
     <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
       Determina quali giorni vengono esclusi dal calcolo automatico dei giorni di ferie in un intervallo.
     </div>
@@ -2386,6 +2617,38 @@ function renderSettingsContent() {
   });
   html += `<button class="add-year-btn" onclick="addNewYear()">+ Aggiungi Anno</button>`;
   c.innerHTML = html;
+}
+
+function saveSaldoIniziale() {
+  const user = currentUser();
+  const data = document.getElementById('siDataInput').value;
+  if (!data) { showToast('Inserisci una data di riferimento'); return; }
+  if (!user.saldoIniziale) user.saldoIniziale = { ferie: 0, permessi: 0, bancaOre: 0 };
+  user.saldoIniziale.data = data;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('✅ Data saldo iniziale salvata');
+}
+
+function saveSaldoInizialeField(field, val) {
+  const user = currentUser();
+  if (!user.saldoIniziale) user.saldoIniziale = { data: '', ferie: 0, permessi: 0, bancaOre: 0 };
+  user.saldoIniziale[field] = parseFloat(val) || 0;
+  saveDb(); renderAll();
+}
+
+function clearSaldoIniziale() {
+  if (!confirm('Rimuovere il saldo iniziale? Il calcolo ripartirà dall\'inizio storico.')) return;
+  const user = currentUser();
+  user.saldoIniziale = null;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast('🗑 Saldo iniziale rimosso');
+}
+
+function toggleBancaOre(val) {
+  const user = currentUser();
+  user.bancaOreEnabled = val;
+  saveDb(); renderAll(); renderSettingsContent();
+  showToast(val ? '⏱ Banca Ore abilitata' : '⏱ Banca Ore disabilitata');
 }
 
 function toggleWorkdayFlag(field, val) {
@@ -2900,7 +3163,7 @@ function hideCalTip() {
     if (e.target === this) this.classList.remove('open');
   });
 });
-['entryModal','monthPickerModal','liquidaModal'].forEach(id => {
+['entryModal','monthPickerModal','liquidaModal','bancaOreModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('open');
   });
@@ -2926,6 +3189,14 @@ if ("serviceWorker" in navigator) {
           });
         });
       }).catch(() => {});
+  });
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then(reg => { reg.update(); reg.addEventListener("updatefound", () => { const nw = reg.installing; nw.addEventListener("statechange", () => { if (nw.state === "activated") window.location.reload(); }); }); }).catch(() => {});
   });
 }
 </script>
