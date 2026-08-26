@@ -1520,6 +1520,16 @@ const now = new Date();
 let viewYear  = now.getFullYear();
 let viewMonth = now.getMonth() + 1; // 1..12
 let currentTab = 'ufficiale';
+
+// In tab Simulazione, "oggi" diventa l'ultimo giorno del mese visualizzato.
+// null = usa la data reale; { year, month } = usa questa come riferimento.
+let simToday = null;
+
+function getEffectiveToday() {
+  if (simToday) return { year: simToday.year, month: simToday.month };
+  const d = new Date();
+  return { year: d.getFullYear(), month: d.getMonth() + 1 };
+}
 let entryType  = 'ferie';
 let pickerYear = viewYear;
 let statsPeriod   = 'month'; // 'month' | 'year' | 'total'
@@ -1587,15 +1597,14 @@ function getSaldoInizDate(user) {
 }
 
 function getAnnualMat(user, year) {
-  const cfg  = getAnnoCfg(user, String(year));
-  const today = new Date();
+  const cfg = getAnnoCfg(user, String(year));
+  const eff = getEffectiveToday(); // usa "oggi simulato" in tab Simulazione
   let meseInizio = 1;
   if (user.dataInizioContratto) {
     const d = new Date(user.dataInizioContratto);
     if (d.getFullYear() > year) return { ferie: 0, permessi: 0 };
     if (d.getFullYear() === year) meseInizio = d.getMonth() + 1;
   }
-  // Saldo iniziale: la maturazione parte da questa data (tutto il prima è già incluso nel saldo)
   const siDate = getSaldoInizDate(user);
   if (siDate) {
     const siYear = siDate.getFullYear();
@@ -1603,14 +1612,13 @@ function getAnnualMat(user, year) {
     if (siYear === year) meseInizio = Math.max(meseInizio, siDate.getMonth() + 1);
   }
   let meseFine;
-  if (year < today.getFullYear()) meseFine = 12;
-  else if (year > today.getFullYear()) meseFine = 0;
-  else meseFine = today.getMonth() + 1;
+  if (year < eff.year) meseFine = 12;
+  else if (year > eff.year) meseFine = 0;
+  else meseFine = eff.month;
   if (meseFine < meseInizio) return { ferie: 0, permessi: 0 };
 
   const mesiLav = meseFine - meseInizio + 1;
   const ferieAnnua = +((cfg.ferieAnnue || 0) / 12 * mesiLav).toFixed(2);
-
   let permTot = 0;
   for (let m = meseInizio; m <= meseFine; m++) {
     permTot += getPermessiOrePerMese(user, year, m);
@@ -1621,12 +1629,17 @@ function getAnnualMat(user, year) {
 // Maturazione di un singolo mese
 function getMonthMat(user, year, month) {
   const cfg = getAnnoCfg(user, String(year));
+  // In tab Simulazione: mesi futuri rispetto al mese visualizzato → nessuna maturazione
+  if (simToday) {
+    const eff = getEffectiveToday();
+    if (year > eff.year) return { ferie: 0, permessi: 0 };
+    if (year === eff.year && month > eff.month) return { ferie: 0, permessi: 0 };
+  }
   if (user.dataInizioContratto) {
     const d = new Date(user.dataInizioContratto);
     if (year < d.getFullYear()) return { ferie: 0, permessi: 0 };
     if (year === d.getFullYear() && month < d.getMonth() + 1) return { ferie: 0, permessi: 0 };
   }
-  // Saldo iniziale: mese precedente alla data = nessuna maturazione (già inclusa nel saldo)
   const siDate = getSaldoInizDate(user);
   if (siDate) {
     const siYear = siDate.getFullYear(), siMonth = siDate.getMonth() + 1;
@@ -1647,10 +1660,15 @@ function getMonthMat(user, year, month) {
 function getYearUsed(user, year, simMode) {
   const calcMode = parseFloat(user.calcMode || '1');
   const siDate = getSaldoInizDate(user);
+  const eff = getEffectiveToday();
   const entries = (user.entries || []).filter(e => {
     if (e.anno !== year) return false;
     if (!simMode && e.sim) return false;
-    // Ignora voci prima del saldo iniziale (già contabilizzate nel saldo)
+    // In tab Simulazione: escludi voci di mesi futuri rispetto al mese visualizzato
+    if (simToday) {
+      if (e.anno > eff.year) return false;
+      if (e.anno === eff.year && e.mese > eff.month) return false;
+    }
     if (siDate && e.dateFrom && new Date(e.dateFrom + 'T00:00:00') < siDate) return false;
     return true;
   });
@@ -1922,6 +1940,9 @@ function fmt(n, unit) {
 // ═══════════════════════════════════════════════
 function renderAll() {
   const user = currentUser();
+  // In tab Simulazione: "oggi" = ultimo giorno del mese visualizzato (per tutte le funzioni di calcolo)
+  // In tutti gli altri tab: usa la data reale
+  simToday = (currentTab === 'simulazione') ? { year: viewYear, month: viewMonth } : null;
   renderHeaderUI(user);
   renderSummary(user);
   renderMonthInfo(user);
@@ -1938,7 +1959,9 @@ function renderHeaderUI(user) {
 
   // month navigator
   const simMode = currentTab === 'simulazione';
-  const simHtml = simMode ? '<span class="sim-badge">SIM</span>' : '';
+  const simHtml = simMode
+    ? `<span class="sim-badge">SIM · oggi = ${MONTHS[viewMonth-1]} ${viewYear}</span>`
+    : '';
   document.getElementById('monthLabelMain').innerHTML = MONTHS[viewMonth-1] + ' ' + viewYear + simHtml;
   document.getElementById('monthLabelSub').textContent = 'tocca per scegliere';
 }
@@ -3436,7 +3459,7 @@ if ("serviceWorker" in navigator) {
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => { reg.update(); reg.addEventListener("updatefound", () => { const nw = reg.installing; nw.addEventListener("statechange", () => { if (nw.state === "activated") window.location.reload(); }); }); }).catch(() => {});
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => { reg.update(); }).catch(() => {});
   });
 }
 </script>
