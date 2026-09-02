@@ -266,6 +266,23 @@
   .entry-qty.f { color: var(--accent-f); }
   .entry-qty.p { color: var(--accent-p); }
   .entry-qty.s { color: var(--accent-sim); }
+  /* ── TAGS ── */
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;
+    white-space: nowrap; cursor: default;
+  }
+  .tag-chip.selectable { cursor: pointer; opacity: 0.7; }
+  .tag-chip.selectable:hover, .tag-chip.selectable.active { opacity: 1; }
+  .tag-filter-row {
+    display: flex; gap: 6px; padding: 6px 12px 2px; overflow-x: auto; flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .tag-filter-row::-webkit-scrollbar { display: none; }
+  .tag-filter-chip {
+    flex-shrink: 0; padding: 4px 10px; border-radius: 14px; font-size: 11px; font-weight: 700;
+    border: 2px solid transparent; cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
   .entry-confirm {
     font-size: 11px; font-weight: 600; cursor: pointer;
     color: var(--accent-sim); background: rgba(245,158,11,.12);
@@ -870,6 +887,9 @@
 <!-- CONFIRM SIM (rimosso: ora per singola voce) -->
 <div id="confirmSimRow" style="display:none"></div>
 
+<!-- TAG FILTER ROW -->
+<div id="tagFilterRow" style="display:none"></div>
+
 <!-- ENTRIES -->
 <div class="entries-container" id="entriesContainer"></div>
 <div id="calendarContainer" style="display:none;padding:0 12px 100px"></div>
@@ -1005,6 +1025,14 @@
         <input type="checkbox" id="entryObbligata" style="width:18px;height:18px;accent-color:var(--accent-sim);cursor:pointer">
         🏢 Chiusura aziendale (obbligata)
       </label>
+    </div>
+    <div class="form-group" id="entryTagsGroup">
+      <label class="form-label">🏷️ Tag</label>
+      <div id="entryTagSelector" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:4px"></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="text" id="newTagQuickName" class="form-input" style="flex:1;font-size:12px" placeholder="Nuovo tag…" onkeydown="if(event.key==='Enter'){createTagQuick();event.preventDefault();}">
+        <button onclick="createTagQuick()" style="padding:6px 10px;background:var(--surface3);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer;white-space:nowrap">+ Aggiungi</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEntryModal()">Annulla</button>
@@ -1193,6 +1221,7 @@ function loadDb() {
         permessoStudioEnabled: false,
         permesso104Budget: 24,
         permessoStudioBudget: 150,
+        tags: [],
         anni: {
           [y-1]: { ferieAnnue: 26, permessiOreAnnui: 100 },
           [y]:   { ferieAnnue: 26, permessiOreAnnui: 100 }
@@ -1505,6 +1534,170 @@ function setupFirebaseAuthListener() {
     }
   });
 }
+// ═══════════════════════════════════════════════
+//  TAG SYSTEM
+// ═══════════════════════════════════════════════
+
+function ensureTags(user) {
+  if (!user.tags) user.tags = [];
+}
+
+function getTagById(user, id) {
+  return (user.tags || []).find(t => t.id === id);
+}
+
+// Colore da assegnare al prossimo tag
+function nextTagColor(user) {
+  const used = (user.tags || []).map(t => t.color);
+  return TAG_COLORS.find(c => !used.includes(c)) || TAG_COLORS[user.tags.length % TAG_COLORS.length];
+}
+
+// Crea tag al volo dal modale inserimento
+function createTagQuick() {
+  const input = document.getElementById('newTagQuickName');
+  const name = input.value.trim();
+  if (!name) return;
+  const user = currentUser();
+  ensureTags(user);
+  if (user.tags.find(t => t.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Tag già esistente'); return;
+  }
+  const tag = { id: genId(), name, color: nextTagColor(user) };
+  user.tags.push(tag);
+  entrySelectedTags.push(tag.id); // seleziona subito il nuovo tag
+  saveDb();
+  input.value = '';
+  renderEntryTagSelector();
+}
+
+// Renderizza il selettore tag nel modale inserimento
+function renderEntryTagSelector() {
+  const user = currentUser();
+  ensureTags(user);
+  const sel = document.getElementById('entryTagSelector');
+  if (!sel) return;
+  if (!user.tags.length) {
+    sel.innerHTML = '<span style="font-size:11px;color:var(--text3)">Nessun tag disponibile — creane uno qui sotto</span>';
+    return;
+  }
+  sel.innerHTML = user.tags.map(t => {
+    const active = entrySelectedTags.includes(t.id);
+    return `<span class="tag-chip selectable${active?' active':''}"
+      style="background:${active ? t.color+'33' : 'var(--surface3)'};color:${active ? t.color : 'var(--text3)'};border:2px solid ${active ? t.color : 'transparent'}"
+      onclick="toggleEntryTag('${t.id}')">
+      ${active ? '✓ ' : ''}${t.name}
+    </span>`;
+  }).join('');
+}
+
+// Toggle tag nel modale inserimento
+function toggleEntryTag(tagId) {
+  const idx = entrySelectedTags.indexOf(tagId);
+  if (idx >= 0) entrySelectedTags.splice(idx, 1);
+  else entrySelectedTags.push(tagId);
+  renderEntryTagSelector();
+}
+
+// Renderizza la riga filtro tag sotto i bottoni azione
+function renderTagFilterRow() {
+  const row = document.getElementById('tagFilterRow');
+  if (!row) return;
+  const user = currentUser();
+  ensureTags(user);
+  // Mostra solo se ci sono tag usati in questo mese/anno
+  const tagsUsed = new Set();
+  (user.entries || []).filter(e => e.anno === viewYear && e.mese === viewMonth)
+    .forEach(e => (e.tags || []).forEach(tid => tagsUsed.add(tid)));
+  const activeTags = (user.tags || []).filter(t => tagsUsed.has(t.id));
+  if (!activeTags.length) {
+    row.style.display = 'none'; return;
+  }
+  row.style.display = '';
+  const allActive = activeTagFilter === null;
+  row.innerHTML = `<span class="tag-filter-chip"
+    style="background:${allActive?'var(--surface2)':'transparent'};color:${allActive?'var(--text)':'var(--text3)'};border-color:${allActive?'var(--border)':'transparent'}"
+    onclick="setTagFilter(null)">Tutti</span>`
+    + activeTags.map(t => {
+      const active = activeTagFilter === t.id;
+      return `<span class="tag-filter-chip"
+        style="background:${active?t.color+'33':'transparent'};color:${active?t.color:'var(--text3)'};border-color:${active?t.color:'transparent'}"
+        onclick="setTagFilter('${t.id}')">🏷️ ${t.name}</span>`;
+    }).join('');
+}
+
+function setTagFilter(tagId) {
+  activeTagFilter = tagId;
+  renderTagFilterRow();
+  renderEntries(currentUser());
+}
+
+// Renderizza tag su una entry card
+function renderEntryTags(entry) {
+  const user = currentUser();
+  if (!entry.tags || !entry.tags.length) return '';
+  return entry.tags.map(tid => {
+    const tag = getTagById(user, tid);
+    if (!tag) return '';
+    return `<span class="tag-chip" style="background:${tag.color}22;color:${tag.color};border:1px solid ${tag.color}55">${tag.name}</span>`;
+  }).join('');
+}
+
+// ── GESTIONE TAG NELLE IMPOSTAZIONI ──
+function renderTagSettings() {
+  const user = currentUser();
+  ensureTags(user);
+  const container = document.getElementById('tagSettingsContainer');
+  if (!container) return;
+  if (!user.tags.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--text3)">Nessun tag. Crea il primo qui sotto.</div>';
+  } else {
+    container.innerHTML = user.tags.map(t => `
+      <div style="display:flex;align-items:center;gap:8px;background:var(--surface3);border-radius:8px;padding:6px 10px;margin-bottom:4px">
+        <div style="width:14px;height:14px;border-radius:50%;background:${t.color};flex-shrink:0"></div>
+        <span style="flex:1;font-size:12px;color:var(--text)">${t.name}</span>
+        <span onclick="cycleTagColor('${t.id}')" style="cursor:pointer;font-size:10px;color:var(--text3);padding:2px 6px;background:var(--surface2);border-radius:4px">🎨</span>
+        <span onclick="deleteTag('${t.id}')" style="cursor:pointer;color:var(--danger);padding:2px 6px">🗑</span>
+      </div>`).join('');
+  }
+}
+
+function createTag() {
+  const input = document.getElementById('newTagName');
+  const name = input.value.trim();
+  if (!name) { showToast('Inserisci un nome per il tag'); return; }
+  const user = currentUser();
+  ensureTags(user);
+  if (user.tags.find(t => t.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Tag già esistente'); return;
+  }
+  user.tags.push({ id: genId(), name, color: nextTagColor(user) });
+  input.value = '';
+  saveDb(); renderTagSettings(); renderAll();
+  showToast('🏷️ Tag creato');
+}
+
+function cycleTagColor(tagId) {
+  const user = currentUser();
+  const tag = getTagById(user, tagId);
+  if (!tag) return;
+  const idx = TAG_COLORS.indexOf(tag.color);
+  tag.color = TAG_COLORS[(idx + 1) % TAG_COLORS.length];
+  saveDb(); renderTagSettings(); renderAll();
+}
+
+function deleteTag(tagId) {
+  const user = currentUser();
+  if (!confirm('Eliminare questo tag? Verrà rimosso da tutte le voci.')) return;
+  user.tags = user.tags.filter(t => t.id !== tagId);
+  // rimuovi dalle entries
+  (user.entries || []).forEach(e => {
+    if (e.tags) e.tags = e.tags.filter(tid => tid !== tagId);
+  });
+  if (activeTagFilter === tagId) activeTagFilter = null;
+  saveDb(); renderTagSettings(); renderAll();
+  showToast('🗑 Tag eliminato');
+}
+
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function currentUser() { return db.users.find(u => u.id === db.currentUserId) || db.users[0]; }
 function getAnnoCfg(user, year) {
@@ -1520,6 +1713,16 @@ const now = new Date();
 let viewYear  = now.getFullYear();
 let viewMonth = now.getMonth() + 1; // 1..12
 let currentTab = 'ufficiale';
+
+// Tag system
+let activeTagFilter = null;     // tagId attivo per il filtro, null = mostra tutto
+let entrySelectedTags = [];     // tag selezionati nel modale inserimento
+
+// Palette colori per i tag
+const TAG_COLORS = [
+  '#4ade80','#60a5fa','#f59e0b','#fb923c','#a78bfa',
+  '#f472b6','#22d3ee','#e11d48','#84cc16','#94a3b8'
+];
 
 // In tab Simulazione, "oggi" diventa l'ultimo giorno del mese visualizzato.
 // null = usa la data reale; { year, month } = usa questa come riferimento.
@@ -1949,6 +2152,7 @@ function renderAll() {
   showHideCalendar(user);
   if (currentTab !== 'calendario' && currentTab !== 'statistiche') {
     renderActionRow();
+    renderTagFilterRow();
     renderEntries(user);
   }
 }
@@ -2098,7 +2302,11 @@ function renderEntries(user) {
 
   // In tab ufficiale: solo official
   // In tab simulazione: official (readonly) + simulated (eliminabili)
+  // Filtra per tag se attivo
   const toShow = simMode ? [...official, ...simulated] : official;
+  const filtered = activeTagFilter
+    ? toShow.filter(e => (e.tags || []).includes(activeTagFilter))
+    : toShow;
 
   if (toShow.length === 0) {
     container.innerHTML = `
@@ -2157,6 +2365,7 @@ function renderEntries(user) {
           <div class="entry-body">
             <div class="entry-title"><span class="entry-title-text">${titleText}</span><span class="entry-title-badges">${allBadges}</span></div>
             <div class="entry-sub">${dates}</div>
+            ${renderEntryTags(e) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">${renderEntryTags(e)}</div>` : ''}
           </div>
           <div class="entry-right">
             <span class="entry-qty ${cls}">${qty}</span>
@@ -2169,14 +2378,14 @@ function renderEntries(user) {
   let html = '';
 
   // Sezione ufficiali (in sim mode, readonly)
-  const offFerie  = toShow.filter(e => !e.sim && e.tipo === 'ferie');
-  const offPerm   = toShow.filter(e => !e.sim && e.tipo === 'permesso');
-  const offPagati = toShow.filter(e => !e.sim && e.tipo === 'permesso_pagato');
-  const off104    = toShow.filter(e => !e.sim && e.tipo === 'permesso_104');
-  const offStudio = toShow.filter(e => !e.sim && e.tipo === 'permesso_studio');
-  const offBanca  = toShow.filter(e => !e.sim && (e.tipo === 'banca_accumulo' || e.tipo === 'banca_fruizione'));
-  const simFerie  = toShow.filter(e =>  e.sim && e.tipo === 'ferie');
-  const simPerm   = toShow.filter(e =>  e.sim && e.tipo === 'permesso');
+  const offFerie  = filtered.filter(e => !e.sim && e.tipo === 'ferie');
+  const offPerm   = filtered.filter(e => !e.sim && e.tipo === 'permesso');
+  const offPagati = filtered.filter(e => !e.sim && e.tipo === 'permesso_pagato');
+  const off104    = filtered.filter(e => !e.sim && e.tipo === 'permesso_104');
+  const offStudio = filtered.filter(e => !e.sim && e.tipo === 'permesso_studio');
+  const offBanca  = filtered.filter(e => !e.sim && (e.tipo === 'banca_accumulo' || e.tipo === 'banca_fruizione'));
+  const simFerie  = filtered.filter(e =>  e.sim && e.tipo === 'ferie');
+  const simPerm   = filtered.filter(e =>  e.sim && e.tipo === 'permesso');
 
   if (offFerie.length || offPerm.length) {
     if (simMode) html += `<div class="entries-section-label" style="color:var(--text3)">📋 Ferie & Permessi Ufficiali</div>`;
@@ -2347,6 +2556,8 @@ function openEntryModal(tipo) {
   document.getElementById('entryQtyOre').value     = '';
   document.getElementById('entryNote').value       = '';
   document.getElementById('entryObbligata').checked = false;
+  entrySelectedTags = [];
+  renderEntryTagSelector();
 
   // mostra i campi data corretti in base al tipo
   document.getElementById('dateRowFerie').style.display    = (tipo === 'ferie')    ? '' : 'none';
@@ -2409,7 +2620,7 @@ function saveEntry() {
   const obbligata = document.getElementById('entryObbligata').checked;
 
   if (!user.entries) user.entries = [];
-  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode, obbligata });
+  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode, obbligata, tags: [...entrySelectedTags] });
   saveDb();
   closeEntryModal();
   // aggiorna vista al mese dell'entry inserita
@@ -2625,6 +2836,7 @@ function addUser() {
     permessoStudioEnabled: false,
     permesso104Budget: 24,
     permessoStudioBudget: 150,
+    tags: [],
     anni: anniObj,
     entries: []
   });
@@ -2684,6 +2896,18 @@ function renderSettingsContent() {
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:3px">
       Imposta la data di assunzione per il calcolo proporzionale delle maturazioni
+    </div>
+  </div>
+  <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(74,222,128,.3)">
+    <div class="anno-config-title" style="color:var(--accent-f)">🏷️ Gestione Tag</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+      I tag ti permettono di categorizzare le voci e filtrarle nella lista. Puoi creare tag al volo anche durante l'inserimento di una voce.
+    </div>
+    <div id="tagSettingsContainer" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px">
+      <input type="text" class="config-input" id="newTagName" placeholder="Nome tag (es. Vacanza)" style="flex:1"
+        onkeydown="if(event.key==='Enter'){createTag();event.preventDefault();}">
+      <button onclick="createTag()" style="padding:6px 10px;background:var(--accent-f);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:12px">+ Crea</button>
     </div>
   </div>
   <div class="anno-config-card" style="margin-bottom:14px;border-color:rgba(96,165,250,.3)">
@@ -2855,6 +3079,7 @@ function renderSettingsContent() {
   });
   html += `<button class="add-year-btn" onclick="addNewYear()">+ Aggiungi Anno</button>`;
   c.innerHTML = html;
+  renderTagSettings(); // popola lista tag
 }
 
 function saveSaldoIniziale() {
