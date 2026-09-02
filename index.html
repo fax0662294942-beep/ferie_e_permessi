@@ -1717,6 +1717,7 @@ let currentTab = 'ufficiale';
 // Tag system
 let activeTagFilter = null;     // tagId attivo per il filtro, null = mostra tutto
 let entrySelectedTags = [];     // tag selezionati nel modale inserimento
+let editingEntryId = null;      // null = nuova voce, id = modifica voce esistente
 
 // Palette colori per i tag
 const TAG_COLORS = [
@@ -2345,16 +2346,20 @@ function renderEntries(user) {
     const studiobadge = isStudio ? '<span style="font-size:9px;background:rgba(34,211,238,.15);color:#22d3ee;padding:1px 5px;border-radius:8px;margin-left:4px">Studio</span>' : '';
     const bancaBadge = (isBancaAcc||isBancaFru) ? `<span style="font-size:9px;background:rgba(167,139,250,.15);color:#a78bfa;padding:1px 5px;border-radius:8px;margin-left:4px">${isBancaAcc?'accumulo':'fruizione'}</span>` : '';
     let actions = '';
+    // Bottone modifica: disponibile su ferie e permessi
+    const editBtn = (e.tipo === 'ferie' || e.tipo === 'permesso') && !isSpecial
+      ? `<span class="entry-confirm" onclick="editEntry('${e.id}')" style="background:rgba(255,255,255,.06);color:var(--text3);border-color:var(--border)" title="Modifica">✏️</span>`
+      : '';
     const obbToggle = (readonly || isSpecial) ? '' :
       `<span class="entry-confirm" style="background:${e.obbligata?'rgba(245,158,11,.25)':'rgba(255,255,255,.06)'};color:${e.obbligata?'var(--accent-sim)':'var(--text3)'};border-color:${e.obbligata?'rgba(245,158,11,.4)':'var(--border)'}" onclick="toggleObbligata('${e.id}')" title="Segna come obbligata/chiusura aziendale">🏢</span>`;
     if (readonly && !isPagato) {
-      actions = '<span style="width:20px"></span>';
+      actions = editBtn + '<span style="width:20px"></span>';
     } else if (isSim) {
-      actions = obbToggle
+      actions = editBtn + obbToggle
               + `<span class="entry-confirm" onclick="confirmSingleEntry('${e.id}')">✅ Conferma</span>`
               + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     } else {
-      actions = obbToggle + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
+      actions = editBtn + obbToggle + `<span class="entry-del" onclick="deleteEntry('${e.id}')">🗑</span>`;
     }
     const titleText = e.note || (e.tipo==='ferie' ? 'Ferie' : isPagato ? 'Permessi liquidati' : is104 ? 'Permesso L.104' : isStudio ? 'Permesso Studio' : isBancaAcc ? 'Banca Ore accumulo' : isBancaFru ? 'Banca Ore fruizione' : 'Permesso');
     const allBadges = badge + obbBadge + pagatoBadge + is104Badge + studiobadge + bancaBadge;
@@ -2520,9 +2525,11 @@ function openEntryMonthPicker() {
   }, curYear, curYear, curMonth);
 }
 
-function openEntryModal(tipo) {
-  entryType = tipo;
+function openEntryModal(tipo, existingEntry) {
+  editingEntryId = existingEntry ? existingEntry.id : null;
+  entryType = existingEntry ? existingEntry.tipo : tipo;
   const simMode = currentTab === 'simulazione';
+  const isEdit = !!existingEntry;
   const title = document.getElementById('entryModalTitle');
   const btn   = document.getElementById('entryConfirmBtn');
   const fGrp  = document.getElementById('ferieQtyGroup');
@@ -2531,41 +2538,53 @@ function openEntryModal(tipo) {
   const user  = currentUser();
   const calcMode = parseFloat(user.calcMode || '1');
 
-  if (tipo === 'ferie') {
-    title.textContent = simMode ? '🔮 Simula Ferie' : '🌴 Inserisci Ferie';
+  if (entryType === 'ferie') {
+    title.textContent = isEdit ? '✏️ Modifica Ferie' : (simMode ? '🔮 Simula Ferie' : '🌴 Inserisci Ferie');
     title.className   = 'modal-title ' + (simMode ? 's' : 'f');
     btn.className     = 'btn-primary ' + (simMode ? 's' : 'f');
+    btn.textContent   = isEdit ? 'Salva modifiche' : 'Salva';
     fGrp.style.display = '';
     pGrp.style.display = 'none';
     hint.textContent  = calcMode === 1.2 ? '(×1.2 CCNL)' : '';
   } else {
-    title.textContent = simMode ? '🔮 Simula Permesso' : '🕐 Inserisci Permesso';
+    title.textContent = isEdit ? '✏️ Modifica Permesso' : (simMode ? '🔮 Simula Permesso' : '🕐 Inserisci Permesso');
     title.className   = 'modal-title ' + (simMode ? 's' : 'p');
     btn.className     = 'btn-primary ' + (simMode ? 's' : 'p');
+    btn.textContent   = isEdit ? 'Salva modifiche' : 'Salva';
     fGrp.style.display = 'none';
     pGrp.style.display = '';
   }
 
-  // default date = primo giorno del mese visualizzato
-  const padM = String(viewMonth).padStart(2,'0');
-  const defDate = `${viewYear}-${padM}-01`;
-  document.getElementById('entryDateFrom').value   = defDate;
-  document.getElementById('entryDateTo').value     = defDate;
-  document.getElementById('entryDateSingle').value = defDate;
-  document.getElementById('entryQtyFerie').value   = '';
-  document.getElementById('entryQtyOre').value     = '';
-  document.getElementById('entryNote').value       = '';
-  document.getElementById('entryObbligata').checked = false;
-  entrySelectedTags = [];
+  if (isEdit) {
+    // Pre-compila con i dati esistenti
+    const e = existingEntry;
+    const dateVal = e.dateFrom || '';
+    document.getElementById('entryDateFrom').value   = dateVal;
+    document.getElementById('entryDateTo').value     = e.dateTo || dateVal;
+    document.getElementById('entryDateSingle').value = dateVal;
+    document.getElementById('entryQtyFerie').value   = e.tipo === 'ferie' ? e.qty : '';
+    document.getElementById('entryQtyOre').value     = e.tipo !== 'ferie' ? e.qty : '';
+    document.getElementById('entryNote').value       = e.note || '';
+    document.getElementById('entryObbligata').checked = e.obbligata || false;
+    entrySelectedTags = [...(e.tags || [])];
+  } else {
+    const padM = String(viewMonth).padStart(2,'0');
+    const defDate = `${viewYear}-${padM}-01`;
+    document.getElementById('entryDateFrom').value   = defDate;
+    document.getElementById('entryDateTo').value     = defDate;
+    document.getElementById('entryDateSingle').value = defDate;
+    document.getElementById('entryQtyFerie').value   = '';
+    document.getElementById('entryQtyOre').value     = '';
+    document.getElementById('entryNote').value       = '';
+    document.getElementById('entryObbligata').checked = false;
+    entrySelectedTags = [];
+  }
   renderEntryTagSelector();
 
-  // mostra i campi data corretti in base al tipo
-  document.getElementById('dateRowFerie').style.display    = (tipo === 'ferie')    ? '' : 'none';
-  document.getElementById('dateRowPermesso').style.display = (tipo === 'permesso') ? '' : 'none';
-
+  document.getElementById('dateRowFerie').style.display    = (entryType === 'ferie')    ? '' : 'none';
+  document.getElementById('dateRowPermesso').style.display = (entryType === 'permesso') ? '' : 'none';
   document.getElementById('entryModal').classList.add('open');
 
-  // ferie: quando si cambia dateFrom → auto-imposta dateTo = dateFrom e ricalcola
   document.getElementById('entryDateFrom').oninput = function() {
     document.getElementById('entryDateTo').value = this.value;
     autoCalcDays();
@@ -2616,17 +2635,36 @@ function saveEntry() {
   const d    = new Date(from);
   const anno = d.getFullYear();
   const mese = d.getMonth() + 1;
-
   const obbligata = document.getElementById('entryObbligata').checked;
 
   if (!user.entries) user.entries = [];
-  user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode, obbligata, tags: [...entrySelectedTags] });
-  saveDb();
-  closeEntryModal();
-  // aggiorna vista al mese dell'entry inserita
-  viewYear = anno; viewMonth = mese;
-  renderAll();
-  showToast(simMode ? '🔮 Voce simulata aggiunta' : '✅ Voce aggiunta');
+
+  if (editingEntryId) {
+    // MODIFICA voce esistente
+    const idx = user.entries.findIndex(e => e.id === editingEntryId);
+    if (idx >= 0) {
+      const existing = user.entries[idx];
+      user.entries[idx] = { ...existing, dateFrom: from, dateTo: to, qty, note, mese, anno, obbligata, tags: [...entrySelectedTags] };
+    }
+    saveDb(); closeEntryModal();
+    viewYear = anno; viewMonth = mese;
+    renderAll();
+    showToast('✅ Voce aggiornata');
+  } else {
+    // NUOVA voce
+    user.entries.push({ id: genId(), tipo: entryType, dateFrom: from, dateTo: to, qty, note, mese, anno, sim: simMode, obbligata, tags: [...entrySelectedTags] });
+    saveDb(); closeEntryModal();
+    viewYear = anno; viewMonth = mese;
+    renderAll();
+    showToast(simMode ? '🔮 Voce simulata aggiunta' : '✅ Voce aggiunta');
+  }
+}
+
+function editEntry(id) {
+  const user = currentUser();
+  const e = (user.entries || []).find(e => e.id === id);
+  if (!e) return;
+  openEntryModal(e.tipo, e);
 }
 
 function deleteEntry(id) {
