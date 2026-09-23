@@ -11,8 +11,6 @@
 <title>Ferie & Permessi</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192x192.png">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192x192.png">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
@@ -3578,9 +3576,12 @@ function renderStats(user) {
 
   // ── Calcola maturato ──
   const mat = getMaturatoPeriodo(user, statsPeriod);
-  const ferieMatEff = +(mat.ferie * calcMode).toFixed(2); // in gg effettivi (×1.2 se CCNL)
+  // Maturato in gg RAW (come contratto: 26gg/anno, non moltiplicato ×1.2)
+  // Utilizzato in gg EFFETTIVI (×1.2 già applicato da computeObbligateStats)
+  // Delta in gg RAW: maturato_raw - utilizzato_effettivi/calcMode
+  const ferieMatRaw  = +mat.ferie.toFixed(2);
   const ferieUsedEff = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
-  const ferieDelta   = +(ferieMatEff - ferieUsedEff).toFixed(2);
+  const ferieDelta   = +(ferieMatRaw - ferieUsedEff / calcMode).toFixed(2);
   const permMat      = +mat.permessi.toFixed(2);
   const permUsedTot  = +(obb.permesso.obbQty + obb.permesso.richQty).toFixed(2);
   const permDelta    = +(permMat - permUsedTot).toFixed(2);
@@ -3589,7 +3590,7 @@ function renderStats(user) {
   const fTot = obb.ferie.obbQty + obb.ferie.richQty;
   const fTotEp = obb.ferie.obbEp + obb.ferie.richEp;
   html += renderTypeBlockNew('Ferie', '🌴', 'var(--accent-f)',
-    obb.ferie, fTot, fTotEp, ferieMatEff, ferieDelta, ' gg', calcMode);
+    obb.ferie, fTot, fTotEp, ferieMatRaw, ferieDelta, ' gg', calcMode);
 
   // ── Blocco PERMESSI ──
   const pTot = obb.permesso.obbQty + obb.permesso.richQty;
@@ -3674,15 +3675,18 @@ function renderStats(user) {
   container.innerHTML = html;
 }
 
-// Helper: blocco ferie/permessi con totale/maturato/delta integrati
-function renderTypeBlockNew(label, icon, color, obb, totQty, totEp, matEff, delta, unit, calcMode) {
+function renderTypeBlockNew(label, icon, color, obb, totQty, totEp, matRaw, delta, unit, calcMode) {
   const totObb = obb.obbQty, totRich = obb.richQty;
   const totAll = totObb + totRich;
-  if (totAll === 0 && matEff === 0) return '';
+  if (totAll === 0 && matRaw === 0) return '';
   const pObb  = totAll > 0 ? Math.round(totObb / totAll * 100) : 0;
   const pRich = 100 - pObb;
   const deltaColor = delta >= 0 ? 'var(--accent-f)' : 'var(--danger)';
   const deltaSign  = delta >= 0 ? '+' : '';
+  // Per le ferie con CCNL ×1.2: il totale utilizzato è in gg effettivi, il maturato in gg raw
+  const usedLabel  = unit === ' gg' && calcMode > 1
+    ? `${fmt(+totQty.toFixed(2), unit)} <span style="font-size:11px;color:var(--text3)">(×${calcMode})</span>`
+    : fmt(+totQty.toFixed(2), unit);
   return `
   <div style="background:var(--surface2);border:1px solid ${color}44;border-radius:12px;padding:14px;margin-bottom:10px">
     <div style="font-size:14px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
@@ -3697,11 +3701,11 @@ function renderTypeBlockNew(label, icon, color, obb, totQty, totEp, matEff, delt
     <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Totale utilizzato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmt(+totQty.toFixed(2),unit)} · ${totEp} ep.</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${usedLabel} · ${totEp} ep.</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Maturato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(matEff,unit)}</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(matRaw,unit)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;background:${delta>=0?'rgba(74,222,128,.08)':'rgba(239,68,68,.08)'};border-radius:8px;padding:6px 10px">
         <span style="font-size:12px;font-weight:700;color:${deltaColor}">Δ Delta</span>
@@ -3912,13 +3916,6 @@ if ("serviceWorker" in navigator) {
           });
         });
       }).catch(() => {});
-  });
-}
-</script>
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => { reg.update(); }).catch(() => {});
   });
 }
 </script>
