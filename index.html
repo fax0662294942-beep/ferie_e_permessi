@@ -1727,6 +1727,15 @@ const TAG_COLORS = [
 // null = usa la data reale; { year, month } = usa questa come riferimento.
 let simToday = null;
 
+// Formatta un valore in giorni di ferie con [raw] tra parentesi quadre per CCNL ×1.2
+// Usato ovunque nell'app al posto di fmt(val, ' gg') per i valori di ferie
+function fmtGG(val, calcMode) {
+  const base = fmt(val, ' gg');
+  if (!calcMode || calcMode <= 1) return base;
+  const raw = +(val / calcMode).toFixed(2);
+  return `${base} [${raw}raw]`;
+}
+
 function getEffectiveToday() {
   if (simToday) return { year: simToday.year, month: simToday.month };
   const d = new Date();
@@ -2217,9 +2226,9 @@ function renderSummary(user) {
   document.getElementById('currYearLabelF').textContent = viewYear;
   document.getElementById('currYearLabelP').textContent = viewYear;
 
-  document.getElementById('fpMat').textContent  = fmt(t.prevFerieMat,  ' gg');
-  document.getElementById('fpUsed').textContent = fmt(t.prevFerieUsed, ' gg' + calcLabel);
-  document.getElementById('fpRes').textContent  = fmt(t.prevFerieRes,  ' gg');
+  document.getElementById('fpMat').textContent  = fmtGG(t.prevFerieMat,  calcMode);
+  document.getElementById('fpUsed').textContent = fmtGG(t.prevFerieUsed, calcMode);
+  document.getElementById('fpRes').textContent  = fmtGG(t.prevFerieRes,  calcMode);
   document.getElementById('ppMat').textContent    = fmt(t.prevPermMat,     'h');
   document.getElementById('ppRes').textContent    = fmt(t.prevPermRes,     'h');
   if (t.prevPermMat < 0) {
@@ -2237,9 +2246,9 @@ function renderSummary(user) {
     document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
   }
 
-  document.getElementById('fcMat').textContent    = fmt(t.ferieMat,        ' gg');
-  document.getElementById('fcUsed').textContent   = fmt(t.ferieUsed,       ' gg' + calcLabel);
-  document.getElementById('fcRes').textContent    = fmt(t.ferieRes,        ' gg');
+  document.getElementById('fcMat').textContent    = fmtGG(t.ferieMat,    calcMode);
+  document.getElementById('fcUsed').textContent   = fmtGG(t.ferieUsed,   calcMode);
+  document.getElementById('fcRes').textContent    = fmtGG(t.ferieRes,    calcMode);
   document.getElementById('pcMat').textContent    = fmt(t.permessiMat,     'h');
   document.getElementById('pcUsed').textContent   = fmt(t.permessiGoduti,  'h');
   document.getElementById('pcPagate').textContent = fmt(t.permessiPagati,  'h');
@@ -2280,19 +2289,20 @@ function renderSummary(user) {
 }
 
 function renderMonthInfo(user) {
-  const simMode = currentTab === 'simulazione';
-  const mat     = getMonthMat(user, viewYear, viewMonth);
-  const used    = getMonthUsed(user, viewYear, viewMonth, simMode);
-  const saldo   = getMonthSaldo(user, viewYear, viewMonth, simMode);
+  const simMode  = currentTab === 'simulazione';
+  const calcMode = parseFloat(user.calcMode || '1');
+  const mat      = getMonthMat(user, viewYear, viewMonth);
+  const used     = getMonthUsed(user, viewYear, viewMonth, simMode);
+  const saldo    = getMonthSaldo(user, viewYear, viewMonth, simMode);
 
-  document.getElementById('mSaldoInizioferie').textContent = fmt(saldo.saldoInizioF,  ' gg');
+  document.getElementById('mSaldoInizioferie').textContent = fmtGG(saldo.saldoInizioF, calcMode);
   document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP,  'h');
-  document.getElementById('mMaturazioneFerie').textContent = fmt(mat.ferie,            ' gg');
+  document.getElementById('mMaturazioneFerie').textContent = fmtGG(mat.ferie,           calcMode);
   document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,         'h');
-  document.getElementById('mUsateFerie').textContent       = fmt(used.ferieUsed,       ' gg');
+  document.getElementById('mUsateFerie').textContent       = fmtGG(used.ferieUsed,     calcMode);
   document.getElementById('mUsatePerm').textContent        = fmt(used.permGoduti,      'h');
   document.getElementById('mPagatiPerm').textContent       = fmt(used.permPagati,      'h');
-  document.getElementById('mSaldoFineFerie').textContent   = fmt(saldo.saldoFineF,     ' gg');
+  document.getElementById('mSaldoFineFerie').textContent   = fmtGG(saldo.saldoFineF,   calcMode);
   document.getElementById('mSaldoFinePerm').textContent    = fmt(saldo.saldoFineP,     'h');
 }
 
@@ -2374,7 +2384,7 @@ function renderEntries(user) {
     else if (isBancaFru)                              { cls = ''; icon = '⏱−'; cardType = 'permesso'; }
     else                                              { cls = 'p'; icon = '🕐'; cardType = 'permesso'; }
 
-    const qty = e.tipo === 'ferie' ? fmt(e.qty * calcMode, ' gg') : fmt(e.qty, 'h');
+    const qty = e.tipo === 'ferie' ? fmtGG(e.qty * calcMode, calcMode) : fmt(e.qty, 'h');
     const readonly = forceReadonly || (!isSim && simMode) || isSpecial;
     const badge = (!isSim && simMode) ? '<span style="font-size:9px;background:rgba(255,255,255,.07);color:var(--text3);padding:1px 5px;border-radius:8px;margin-left:4px">ufficiale</span>' : '';
     const obbBadge = e.obbligata ? '<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:8px;margin-left:4px">🏢 obbligata</span>' : '';
@@ -3656,7 +3666,7 @@ function renderStats(user) {
       const isPag   = e.tipo === 'permesso_pagato';
       const color   = isFerie ? 'var(--accent-f)' : isPag ? 'var(--accent-sim)' : 'var(--accent-p)';
       const icon    = isFerie ? '🌴' : isPag ? '💰' : '🕐';
-      const qty     = isFerie ? fmt(+(e.qty * calcMode).toFixed(2), ' gg') : fmt(e.qty, 'h');
+      const qty     = isFerie ? fmtGG(+(e.qty * calcMode).toFixed(2), calcMode) : fmt(e.qty, 'h');
       const dates   = e.dateTo && e.dateTo !== e.dateFrom ? `${e.dateFrom} → ${e.dateTo}` : e.dateFrom || '';
       const obbBadge = e.obbligata ? `<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:6px;margin-left:4px">🏢</span>` : '';
       const tagBadges = (e.tags||[]).map(tid=>{
@@ -3687,6 +3697,15 @@ function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, ma
   const pRich = 100 - pObb;
   const deltaColor = delta >= 0 ? 'var(--accent-f)' : 'var(--danger)';
   const deltaSign  = delta >= 0 ? '+' : '';
+
+  // Helper: mostra "X gg [Y raw]" per CCNL ×1.2, solo "X gg" altrimenti
+  const fmtRaw = (val, u) => {
+    const base = fmt(+val.toFixed(2), u);
+    if (calcMode <= 1 || u !== ' gg') return base;
+    const raw = +(val / calcMode).toFixed(2);
+    return `${base} <span style="font-size:11px;color:var(--text3);font-weight:400">[${raw} raw]</span>`;
+  };
+
   return `
   <div style="background:var(--surface2);border:1px solid ${color}44;border-radius:12px;padding:14px;margin-bottom:10px">
     <div style="font-size:14px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
@@ -3695,21 +3714,21 @@ function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, ma
       <div style="width:${pObb}%;background:var(--accent-sim);border-radius:4px 0 0 4px"></div>
       <div style="width:${pRich}%;background:${color};border-radius:0 4px 4px 0"></div>
     </div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">🏢 Obbligate: <strong>${fmt(+totObb.toFixed(2),unit)}</strong> (${pObb}%) · ${obb.obbEp} episodi</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">👤 Richieste: <strong>${fmt(+totRich.toFixed(2),unit)}</strong> (${pRich}%) · ${obb.richEp} episodi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">🏢 Obbligate: <strong>${fmtRaw(totObb, unit)}</strong> (${pObb}%) · ${obb.obbEp} episodi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">👤 Richieste: <strong>${fmtRaw(totRich, unit)}</strong> (${pRich}%) · ${obb.richEp} episodi</div>
     ` : ''}
     <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Totale utilizzato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmt(+totUsed.toFixed(2),unit)} · ${totEp} ep.</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmtRaw(totUsed, unit)} · ${totEp} ep.</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Maturato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(mat,unit)}</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmtRaw(mat, unit)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;background:${delta>=0?'rgba(74,222,128,.08)':'rgba(239,68,68,.08)'};border-radius:8px;padding:6px 10px">
         <span style="font-size:12px;font-weight:700;color:${deltaColor}">Δ Delta</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${deltaColor}">${deltaSign}${fmt(+Math.abs(delta).toFixed(2),unit)}</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${deltaColor}">${deltaSign}${fmtRaw(Math.abs(delta), unit)}</span>
       </div>
     </div>
   </div>`;
@@ -3789,10 +3808,10 @@ function renderCalendar(user, calSimMode) {
   // Mode label
   // Summary bar
   html += `<div class="cal-month-summary">
-    <div class="cal-sum-item"><div class="cal-sum-label">🌴 Ferie</div><div class="cal-sum-val f">${fmt(ferieGG, ' gg')}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">🌴 Ferie</div><div class="cal-sum-val f">${fmtGG(ferieGG, calcMode)}</div></div>
     <div class="cal-sum-item"><div class="cal-sum-label">🕐 Permessi</div><div class="cal-sum-val p">${fmt(permH, 'h')}</div></div>
     ${simFerieGG > 0 || simPermH > 0 ? `
-    <div class="cal-sum-item"><div class="cal-sum-label">🔮 Sim. Ferie</div><div class="cal-sum-val s">${fmt(simFerieGG, ' gg')}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">🔮 Sim. Ferie</div><div class="cal-sum-val s">${fmtGG(simFerieGG, calcMode)}</div></div>
     <div class="cal-sum-item"><div class="cal-sum-label">🔮 Sim. Perm.</div><div class="cal-sum-val s">${fmt(simPermH, 'h')}</div></div>` : ''}
   </div>`;
 
@@ -3842,7 +3861,7 @@ function renderCalendar(user, calSimMode) {
 
       const tips = [...new Set(info.entries.map(e =>
         (e.sim ? '🔮 ' : '') +
-        (e.tipo === 'ferie' ? `Ferie: ${fmt(e.qty * calcMode, 'gg')}` : `Permesso: ${fmt(e.qty, 'h')}`) +
+        (e.tipo === 'ferie' ? `Ferie: ${fmtGG(e.qty * calcMode, calcMode)}` : `Permesso: ${fmt(e.qty, 'h')}`) +
         (e.note ? ' — ' + e.note : '')
       ))];
       tooltip = tips.join('\n');
