@@ -3580,19 +3580,21 @@ function renderStats(user) {
   // Maturato in gg RAW (come contratto: 26gg/anno, non moltiplicato ×1.2)
   // Utilizzato in gg EFFETTIVI (×1.2 già applicato da computeObbligateStats)
   // Delta in gg RAW: maturato_raw - utilizzato_effettivi/calcMode
-  const ferieMatRaw  = +mat.ferie.toFixed(2);
-  const ferieUsedEff = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
-  const ferieUsedRaw = +(ferieUsedEff / calcMode).toFixed(2); // in gg raw (comparabili col maturato)
-  const ferieDelta   = +(ferieMatRaw - ferieUsedRaw).toFixed(2);
+  // Tutto in GIORNI DI FERIE (unità del contratto).
+  // computeObbligateStats già applica ×1.2 → obbQty+richQty sono giorni di ferie consumati.
+  // getAnnualMat/getMonthMat restituisce giorni di ferie maturati.
+  // Delta = maturato - utilizzato, stessa unità, nessuna conversione.
+  const ferieMat  = +mat.ferie.toFixed(2);
+  const ferieUsed = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
+  const ferieDelta = +(ferieMat - ferieUsed).toFixed(2);
   const permMat      = +mat.permessi.toFixed(2);
   const permUsedTot  = +(obb.permesso.obbQty + obb.permesso.richQty).toFixed(2);
   const permDelta    = +(permMat - permUsedTot).toFixed(2);
 
   // ── Blocco FERIE ──
-  const fTot = obb.ferie.obbQty + obb.ferie.richQty;
   const fTotEp = obb.ferie.obbEp + obb.ferie.richEp;
   html += renderTypeBlockNew('Ferie', '🌴', 'var(--accent-f)',
-    obb.ferie, ferieUsedRaw, ferieUsedEff, fTotEp, ferieMatRaw, ferieDelta, ' gg', calcMode);
+    obb.ferie, ferieUsed, ferieUsed, fTotEp, ferieMat, ferieDelta, ' gg', calcMode);
 
   // ── Blocco PERMESSI ──
   const pTot = obb.permesso.obbQty + obb.permesso.richQty;
@@ -3677,20 +3679,14 @@ function renderStats(user) {
   container.innerHTML = html;
 }
 
-function renderTypeBlockNew(label, icon, color, obb, totUsedRaw, totUsedEff, totEp, matRaw, delta, unit, calcMode) {
+function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, mat, delta, unit, calcMode) {
   const totObb = obb.obbQty, totRich = obb.richQty;
   const totAll = totObb + totRich;
-  if (totAll === 0 && matRaw === 0) return '';
+  if (totAll === 0 && mat === 0) return '';
   const pObb  = totAll > 0 ? Math.round(totObb / totAll * 100) : 0;
   const pRich = 100 - pObb;
   const deltaColor = delta >= 0 ? 'var(--accent-f)' : 'var(--danger)';
   const deltaSign  = delta >= 0 ? '+' : '';
-  // Per le ferie con CCNL ×1.2: mostra i giorni utilizzati in unità RAW con effettivi tra parentesi
-  // Per i permessi (calcMode=1): raw = effettivo, nessuna parentesi
-  const usedMain  = fmt(+totUsedRaw.toFixed(2), unit);
-  const usedExtra = (unit === ' gg' && calcMode > 1 && totUsedEff !== totUsedRaw)
-    ? ` <span style="font-size:11px;color:var(--text3)">(${fmt(+totUsedEff.toFixed(2),unit)} ×${calcMode})</span>`
-    : '';
   return `
   <div style="background:var(--surface2);border:1px solid ${color}44;border-radius:12px;padding:14px;margin-bottom:10px">
     <div style="font-size:14px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
@@ -3699,17 +3695,17 @@ function renderTypeBlockNew(label, icon, color, obb, totUsedRaw, totUsedEff, tot
       <div style="width:${pObb}%;background:var(--accent-sim);border-radius:4px 0 0 4px"></div>
       <div style="width:${pRich}%;background:${color};border-radius:0 4px 4px 0"></div>
     </div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">🏢 Obbligate: <strong>${fmt(+(totObb/(calcMode>1&&unit===' gg'?calcMode:1)).toFixed(2),unit)}</strong> (${pObb}%) · ${obb.obbEp} episodi</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">👤 Richieste: <strong>${fmt(+(totRich/(calcMode>1&&unit===' gg'?calcMode:1)).toFixed(2),unit)}</strong> (${pRich}%) · ${obb.richEp} episodi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">🏢 Obbligate: <strong>${fmt(+totObb.toFixed(2),unit)}</strong> (${pObb}%) · ${obb.obbEp} episodi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">👤 Richieste: <strong>${fmt(+totRich.toFixed(2),unit)}</strong> (${pRich}%) · ${obb.richEp} episodi</div>
     ` : ''}
     <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Totale utilizzato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${usedMain}${usedExtra} · ${totEp} ep.</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmt(+totUsed.toFixed(2),unit)} · ${totEp} ep.</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Maturato</span>
-        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(matRaw,unit)}</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(mat,unit)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;background:${delta>=0?'rgba(74,222,128,.08)':'rgba(239,68,68,.08)'};border-radius:8px;padding:6px 10px">
         <span style="font-size:12px;font-weight:700;color:${deltaColor}">Δ Delta</span>
