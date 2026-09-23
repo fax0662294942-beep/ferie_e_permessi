@@ -3606,19 +3606,16 @@ function renderStats(user) {
   html += renderTypeBlockNew('Ferie', '🌴', 'var(--accent-f)',
     obb.ferie, ferieUsed, ferieUsed, fTotEp, ferieMat, ferieDelta, ' gg', calcMode);
 
-  // ── Blocco PERMESSI ──
-  const pTot = obb.permesso.obbQty + obb.permesso.richQty;
-  const pTotEp = obb.permesso.obbEp + obb.permesso.richEp;
+  // ── Blocco PERMESSI (include liquidati) ──
+  const pTot   = obb.permesso.obbQty + obb.permesso.richQty;
+  const pTotEp = obb.permesso.obbEp  + obb.permesso.richEp;
+  const pLiqQty = +obb.pagati.qty.toFixed(2);
+  const pLiqEp  = obb.pagati.ep;
+  // Delta include anche liquidati (consumano budget permessi)
+  const permDeltaConLiq = +(permMat - pTot - pLiqQty).toFixed(2);
   html += renderTypeBlockNew('Permessi', '🕐', 'var(--accent-p)',
-    obb.permesso, pTot, pTot, pTotEp, permMat, permDelta, 'h', 1);
-
-  // ── Blocco PAGATI (se presenti) ──
-  if (obb.pagati.ep > 0) {
-    html += `<div style="background:var(--surface2);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:var(--accent-sim);margin-bottom:8px">💰 Permessi Liquidati</div>
-      <div style="font-size:14px;color:var(--text2)"><strong>${fmt(+obb.pagati.qty.toFixed(2),'h')}</strong> liquidati · ${obb.pagati.ep} episodi</div>
-    </div>`;
-  }
+    obb.permesso, pTot, pTot, pTotEp, permMat, permDeltaConLiq, 'h', 1,
+    pLiqQty > 0 ? { qty: pLiqQty, ep: pLiqEp } : null);
 
   // ── DISTRIBUZIONE GIORNI SETTIMANA ──
   const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory, user);
@@ -3689,7 +3686,7 @@ function renderStats(user) {
   container.innerHTML = html;
 }
 
-function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, mat, delta, unit, calcMode) {
+function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, mat, delta, unit, calcMode, liquidati) {
   const totObb = obb.obbQty, totRich = obb.richQty;
   const totAll = totObb + totRich;
   if (totAll === 0 && mat === 0) return '';
@@ -3722,6 +3719,11 @@ function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, ma
         <span style="font-size:12px;color:var(--text3)">Totale utilizzato</span>
         <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmtRaw(totUsed, unit)} · ${totEp} ep.</span>
       </div>
+      ${liquidati ? `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--text3)">💰 Liquidati</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-sim)">${fmt(liquidati.qty,'h')} · ${liquidati.ep} ep.</span>
+      </div>` : ''}
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;color:var(--text3)">Maturato</span>
         <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmtRaw(mat, unit)}</span>
