@@ -1770,25 +1770,44 @@ function getMesiLavoratiAnno(user, year) {
  * Per gli altri contratti si usa sempre cfg.permessiOreAnnui.
  * Il calcolo è proporzionale al mese (come la data inizio contratto).
  */
+/*
+ * Arrotondamento mensile "dell'accountant" (regola 2 decimali esatti a fine anno):
+ * Dati T giorni/ore annuali e la posizione del mese nel calendario (1-12):
+ *   - I primi monthsAtFloor mesi prendono floor(T/12, 2 decimali)
+ *   - Gli altri mesi prendono floor+0.01
+ * Così la somma su 12 mesi è esattamente T.
+ *
+ * Esempio: T=26 → floor=2.16, monthsAtFloor=4
+ *   mesi 1-4: 2.16  mesi 5-12: 2.17  totale: 4×2.16 + 8×2.17 = 26.00 ✓
+ * Esempio: T=32 → floor=2.66, monthsAtFloor=4
+ *   mesi 1-4: 2.66  mesi 5-12: 2.67  totale: 4×2.66 + 8×2.67 = 32.00 ✓
+ */
+function getRoundedMonthRate(annualTotal, calendarMonth) {
+  if (!annualTotal) return 0;
+  const floorCents    = Math.floor(annualTotal / 12 * 100);    // valore floor in centesimi
+  const monthsAtFloor = 12 - (Math.round(annualTotal * 100) - floorCents * 12);
+  return calendarMonth <= monthsAtFloor
+    ? floorCents / 100           // difetto
+    : (floorCents + 1) / 100;   // eccesso
+}
+
 function getPermessiOrePerMese(user, year, month) {
-  // se non CCNL o no data inizio → usa valore configurato manualmente
+  let oreAnnue;
   if (parseFloat(user.calcMode||'1') !== 1.2 || !user.dataInizioContratto) {
     const cfg = getAnnoCfg(user, String(year));
-    return (cfg.permessiOreAnnui || 0) / 12;
+    oreAnnue = cfg.permessiOreAnnui || 0;
+  } else {
+    const ccnl = user.permessiCCNL || { anni02: 32, anni24: 68, anni5plus: 104 };
+    const inizio  = new Date(user.dataInizioContratto);
+    const dataRef = new Date(year, month - 1, 1);
+    const mesiAnz = (dataRef.getFullYear() - inizio.getFullYear()) * 12
+                  + (dataRef.getMonth()    - inizio.getMonth());
+    if (mesiAnz < 0) return 0;
+    if      (mesiAnz < 24) oreAnnue = ccnl.anni02    || 32;
+    else if (mesiAnz < 48) oreAnnue = ccnl.anni24    || 68;
+    else                   oreAnnue = ccnl.anni5plus || 104;
   }
-  const ccnl = user.permessiCCNL || { anni02: 32, anni24: 68, anni5plus: 104 };
-  const inizio = new Date(user.dataInizioContratto);
-  // data del primo giorno del mese considerato
-  const dataRef = new Date(year, month - 1, 1);
-  // mesi di anzianità al 1° del mese
-  const mesiAnz = (dataRef.getFullYear() - inizio.getFullYear()) * 12
-                + (dataRef.getMonth()    - inizio.getMonth());
-  if (mesiAnz < 0) return 0; // non ancora assunto
-  let oreAnnue;
-  if      (mesiAnz < 24) oreAnnue = ccnl.anni02    || 32;
-  else if (mesiAnz < 48) oreAnnue = ccnl.anni24    || 68;
-  else                   oreAnnue = ccnl.anni5plus || 104;
-  return oreAnnue / 12;
+  return getRoundedMonthRate(oreAnnue, month);
 }
 
 // Maturazione annua totale per un dato anno
@@ -1846,16 +1865,15 @@ function monthAccrues(user, year, month) {
 function getAnnualMat(user, year) {
   const cfg = getAnnoCfg(user, String(year));
   const eff = getEffectiveToday();
-  // Anno oltre l'orizzonte: niente
   if (year > eff.year) return { ferie: 0, permessi: 0 };
 
-  // Itera mese per mese applicando la regola dei 15 giorni
+  // Itera mese per mese applicando la regola dei 15 giorni e l'arrotondamento del contabile
   let ferieAnnua = 0;
   let permTot    = 0;
   const meseFine = (year < eff.year) ? 12 : eff.month;
   for (let m = 1; m <= meseFine; m++) {
     if (monthAccrues(user, year, m)) {
-      ferieAnnua += (cfg.ferieAnnue || 0) / 12;
+      ferieAnnua += getRoundedMonthRate(cfg.ferieAnnue || 0, m);
       permTot    += getPermessiOrePerMese(user, year, m);
     }
   }
@@ -1867,7 +1885,7 @@ function getMonthMat(user, year, month) {
   if (!monthAccrues(user, year, month)) return { ferie: 0, permessi: 0 };
   const cfg = getAnnoCfg(user, String(year));
   return {
-    ferie:    +((cfg.ferieAnnue || 0) / 12).toFixed(4),
+    ferie:    +getRoundedMonthRate(cfg.ferieAnnue || 0, month).toFixed(4),
     permessi: +getPermessiOrePerMese(user, year, month).toFixed(4)
   };
 }
@@ -3415,6 +3433,37 @@ function setStatsPeriod(p) { statsPeriod = p; renderStats(currentUser()); }
 function setStatsType(t)   { statsType = t;   renderStats(currentUser()); }
 function setStatsCategory(c) { statsCategory = c; renderStats(currentUser()); }
 
+// Calcola ferie e permessi maturati nel periodo selezionato
+function getMaturatoPeriodo(user, period) {
+  if (period === 'month') {
+    const m = getMonthMat(user, viewYear, viewMonth);
+    return { ferie: +m.ferie.toFixed(2), permessi: +m.permessi.toFixed(2) };
+  }
+  if (period === 'year') {
+    const m = getAnnualMat(user, viewYear);
+    return { ferie: m.ferie, permessi: m.permessi };
+  }
+  // 'total': somma da anno più vecchio configurato fino ad oggi
+  const siDate = getSaldoInizDate(user);
+  let startYear;
+  if (siDate) {
+    startYear = siDate.getFullYear();
+  } else if (user.dataInizioContratto) {
+    startYear = new Date(user.dataInizioContratto).getFullYear();
+  } else {
+    const years = Object.keys(user.anni || {}).map(Number);
+    startYear = years.length ? Math.min(...years) : viewYear;
+  }
+  const endYear = getEffectiveToday().year;
+  let ferieT = 0, permT = 0;
+  for (let y = startYear; y <= endYear; y++) {
+    const m = getAnnualMat(user, y);
+    ferieT += m.ferie;
+    permT  += m.permessi;
+  }
+  return { ferie: +ferieT.toFixed(2), permessi: +permT.toFixed(2) };
+}
+
 function pct(part, total) {
   if (!total) return '0%';
   return Math.round(part / total * 100) + '%';
@@ -3480,6 +3529,34 @@ function renderStats(user) {
 
   html += renderTypeBlock('Ferie', '🌴', 'var(--accent-f)', obb.ferie, ' gg');
   html += renderTypeBlock('Permessi', '🕐', 'var(--accent-p)', obb.permesso, 'h');
+
+  // ── Blocco Maturate nel periodo ──
+  const mat = getMaturatoPeriodo(user, statsPeriod);
+  const calcMode_ = parseFloat(user.calcMode || '1');
+  const totalFerieUsed = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
+  const totalPermUsed  = +(obb.permesso.obbQty + obb.permesso.richQty + obb.pagati.qty).toFixed(2);
+  const residuoF = +(mat.ferie - totalFerieUsed / calcMode_).toFixed(2);
+  const residuoP = +(mat.permessi - totalPermUsed).toFixed(2);
+  html += `<div style="background:var(--surface2);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px">📈 Maturato nel periodo</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🌴 Ferie maturate</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-f)">${fmt(mat.ferie, ' gg')}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">usate ${fmt(+(totalFerieUsed/calcMode_).toFixed(2), ' gg')}</div>
+      </div>
+      <div style="flex:1;background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🕐 Permessi maturati</div>
+        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-p)">${fmt(mat.permessi, 'h')}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">usati ${fmt(totalPermUsed, 'h')}</div>
+      </div>
+    </div>
+    ${statsPeriod !== 'total' && (mat.ferie > 0 || mat.permessi > 0) ? `
+    <div style="margin-top:8px;display:flex;gap:6px;font-size:11px">
+      <span style="flex:1;text-align:center;color:${residuoF>=0?'var(--accent-f)':'var(--danger)'}">Δ ferie: ${fmt(residuoF,' gg')}</span>
+      <span style="flex:1;text-align:center;color:${residuoP>=0?'var(--accent-p)':'var(--danger)'}">Δ permessi: ${fmt(residuoP,'h')}</span>
+    </div>` : ''}
+  </div>`;
 
   // Blocco permessi liquidati
   if (obb.pagati.ep > 0) {
