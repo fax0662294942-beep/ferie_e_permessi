@@ -2494,6 +2494,7 @@ function showHideCalendar(user) {
     const el = document.getElementById(id);
     if (el) el.style.display = isStats ? 'none' : (id === 'summaryGrid' ? '' : el.dataset.origDisplay || 'none');
   });
+  document.getElementById('stickyTop').style.display    = isStats ? 'none' : '';
   document.getElementById('monthInfoBar').style.display = isStats ? 'none' : '';
   document.getElementById('tagFilterRow').style.display  = isStats ? 'none' : '';
 
