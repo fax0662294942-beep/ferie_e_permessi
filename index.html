@@ -1727,13 +1727,13 @@ const TAG_COLORS = [
 // null = usa la data reale; { year, month } = usa questa come riferimento.
 let simToday = null;
 
-// Formatta un valore in giorni di ferie con [raw] tra parentesi quadre per CCNL ×1.2
-// Usato ovunque nell'app al posto di fmt(val, ' gg') per i valori di ferie
+// Formatta un valore in giorni di ferie con [X lav.] tra parentesi quadre per CCNL ×1.2
+// "lav." = giorni lavorativi effettivi (giorni / 1.2 = giorni realmente assente)
 function fmtGG(val, calcMode) {
   const base = fmt(val, ' gg');
   if (!calcMode || calcMode <= 1) return base;
-  const raw = +(val / calcMode).toFixed(2);
-  return `${base} [${raw}raw]`;
+  const lav = +(val / calcMode).toFixed(2);
+  return `${base} [${lav} lav.]`;
 }
 
 function getEffectiveToday() {
@@ -3702,8 +3702,8 @@ function renderTypeBlockNew(label, icon, color, obb, totUsed, _unused, totEp, ma
   const fmtRaw = (val, u) => {
     const base = fmt(+val.toFixed(2), u);
     if (calcMode <= 1 || u !== ' gg') return base;
-    const raw = +(val / calcMode).toFixed(2);
-    return `${base} <span style="font-size:11px;color:var(--text3);font-weight:400">[${raw} raw]</span>`;
+    const lav = +(val / calcMode).toFixed(2);
+    return `${base} <span style="font-size:11px;color:var(--text3);font-weight:400">[${lav} lav.]</span>`;
   };
 
   return `
