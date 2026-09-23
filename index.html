@@ -1727,13 +1727,13 @@ const TAG_COLORS = [
 // null = usa la data reale; { year, month } = usa questa come riferimento.
 let simToday = null;
 
-// Formatta un valore in giorni di ferie con [X lav.] tra parentesi quadre per CCNL ×1.2
+// Formatta un valore in giorni di ferie — valore in grassetto, [lav.] a capo in testo leggero
 // "lav." = giorni lavorativi effettivi (giorni / 1.2 = giorni realmente assente)
 function fmtGG(val, calcMode) {
-  const base = fmt(val, ' gg');
-  if (!calcMode || calcMode <= 1) return base;
+  const giorni = fmt(val, ' gg');
+  if (!calcMode || calcMode <= 1) return giorni;
   const lav = +(val / calcMode).toFixed(2);
-  return `${base} [${lav} lav.]`;
+  return `<strong>${giorni}</strong><br><span style="font-size:0.8em;font-weight:400;opacity:0.6">[${lav} lav.]</span>`;
 }
 
 function getEffectiveToday() {
@@ -2226,9 +2226,9 @@ function renderSummary(user) {
   document.getElementById('currYearLabelF').textContent = viewYear;
   document.getElementById('currYearLabelP').textContent = viewYear;
 
-  document.getElementById('fpMat').textContent  = fmtGG(t.prevFerieMat,  calcMode);
-  document.getElementById('fpUsed').textContent = fmtGG(t.prevFerieUsed, calcMode);
-  document.getElementById('fpRes').textContent  = fmtGG(t.prevFerieRes,  calcMode);
+  document.getElementById('fpMat').innerHTML = fmtGG(t.prevFerieMat,  calcMode);
+  document.getElementById('fpUsed').innerHTML = fmtGG(t.prevFerieUsed, calcMode);
+  document.getElementById('fpRes').innerHTML = fmtGG(t.prevFerieRes,  calcMode);
   document.getElementById('ppMat').textContent    = fmt(t.prevPermMat,     'h');
   document.getElementById('ppRes').textContent    = fmt(t.prevPermRes,     'h');
   if (t.prevPermMat < 0) {
@@ -2247,7 +2247,7 @@ function renderSummary(user) {
   }
 
   document.getElementById('fcMat').textContent    = fmtGG(t.ferieMat,    calcMode);
-  document.getElementById('fcUsed').textContent   = fmtGG(t.ferieUsed,   calcMode);
+  document.getElementById('fcUsed').innerHTML = fmtGG(t.ferieUsed,   calcMode);
   document.getElementById('fcRes').textContent    = fmtGG(t.ferieRes,    calcMode);
   document.getElementById('pcMat').textContent    = fmt(t.permessiMat,     'h');
   document.getElementById('pcUsed').textContent   = fmt(t.permessiGoduti,  'h');
@@ -2295,14 +2295,14 @@ function renderMonthInfo(user) {
   const used     = getMonthUsed(user, viewYear, viewMonth, simMode);
   const saldo    = getMonthSaldo(user, viewYear, viewMonth, simMode);
 
-  document.getElementById('mSaldoInizioferie').textContent = fmtGG(saldo.saldoInizioF, calcMode);
+  document.getElementById('mSaldoInizioferie').innerHTML = fmtGG(saldo.saldoInizioF, calcMode);
   document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP,  'h');
-  document.getElementById('mMaturazioneFerie').textContent = fmtGG(mat.ferie,           calcMode);
+  document.getElementById('mMaturazioneFerie').innerHTML = fmtGG(mat.ferie,           calcMode);
   document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,         'h');
   document.getElementById('mUsateFerie').textContent       = fmtGG(used.ferieUsed,     calcMode);
   document.getElementById('mUsatePerm').textContent        = fmt(used.permGoduti,      'h');
   document.getElementById('mPagatiPerm').textContent       = fmt(used.permPagati,      'h');
-  document.getElementById('mSaldoFineFerie').textContent   = fmtGG(saldo.saldoFineF,   calcMode);
+  document.getElementById('mSaldoFineFerie').innerHTML = fmtGG(saldo.saldoFineF,   calcMode);
   document.getElementById('mSaldoFinePerm').textContent    = fmt(saldo.saldoFineP,     'h');
 }
 
