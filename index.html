@@ -719,7 +719,7 @@
 </div><!-- /stickyTop -->
 
 <!-- SUMMARY CARDS -->
-<div class="summary-grid">
+<div class="summary-grid" id="summaryGrid">
   <div class="summary-section ferie">
     <div class="section-title ferie">🌴 Ferie</div>
     <div class="year-block">
@@ -1736,9 +1736,11 @@ function getEffectiveToday() {
 }
 let entryType  = 'ferie';
 let pickerYear = viewYear;
-let statsPeriod   = 'month'; // 'month' | 'year' | 'total'
+let statsPeriod   = 'month'; // 'month' | 'year' | 'total' | 'custom'
 let statsType     = 'tutti'; // 'ferie' | 'permesso' | 'tutti'  (per weekday breakdown)
 let statsCategory = 'tutte'; // 'obbligate' | 'richieste' | 'tutte' (per weekday breakdown)
+let statsFromDate = ''; // per periodo personalizzato (YYYY-MM-DD)
+let statsToDate   = ''; // per periodo personalizzato (YYYY-MM-DD)
 
 
 // ═══════════════════════════════════════════════
@@ -2488,13 +2490,22 @@ function showHideCalendar(user) {
   const isCalendar = currentTab === 'calendario';
   const isStats    = currentTab === 'statistiche';
   const isSpecial  = isCalendar || isStats;
+
+  // Nel tab statistiche nascondi tutto tranne il container statistiche
+  ['summaryGrid','bancaOreCard','p104Card','pStudioCard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isStats ? 'none' : (id === 'summaryGrid' ? '' : el.dataset.origDisplay || 'none');
+  });
+  document.getElementById('monthInfoBar').style.display = isStats ? 'none' : '';
+  document.getElementById('tagFilterRow').style.display  = isStats ? 'none' : '';
+
   document.getElementById('calendarContainer').style.display = isCalendar ? '' : 'none';
   document.getElementById('statsContainer').style.display    = isStats ? '' : 'none';
   document.getElementById('entriesContainer').style.display  = isSpecial ? 'none' : '';
   document.getElementById('actionRow').style.display         = isSpecial ? 'none' : '';
   document.getElementById('confirmSimRow').style.display     = isSpecial ? 'none' :
     (currentTab === 'simulazione' ? '' : 'none');
-  if (isCalendar) renderCalendar(user, true); // mostra sempre ufficiali + simulate
+  if (isCalendar) renderCalendar(user, true);
   if (isStats)    renderStats(user);
 }
 
@@ -3371,8 +3382,17 @@ function showToast(msg) {
 // Filtra le entries (sempre ufficiali, mai simulate) in base al periodo scelto
 function getStatsEntries(user, period) {
   const all = (user.entries || []).filter(e => !e.sim);
-  if (period === 'month') return all.filter(e => e.anno === viewYear && e.mese === viewMonth);
-  if (period === 'year')  return all.filter(e => e.anno === viewYear);
+  if (period === 'month')  return all.filter(e => e.anno === viewYear && e.mese === viewMonth);
+  if (period === 'year')   return all.filter(e => e.anno === viewYear);
+  if (period === 'custom') {
+    if (!statsFromDate || !statsToDate) return [];
+    const from = new Date(statsFromDate + 'T00:00:00');
+    const to   = new Date(statsToDate   + 'T23:59:59');
+    return all.filter(e => {
+      const d = new Date((e.dateFrom || '') + 'T00:00:00');
+      return d >= from && d <= to;
+    });
+  }
   return all; // 'total'
 }
 
@@ -3429,11 +3449,37 @@ function computeWeekdayStats(entries, typeFilter, categoryFilter, user) {
   return counts;
 }
 
-function setStatsPeriod(p) { statsPeriod = p; renderStats(currentUser()); }
-function setStatsType(t)   { statsType = t;   renderStats(currentUser()); }
+function setStatsPeriod(p) {
+  statsPeriod = p;
+  if (p === 'custom' && !statsFromDate) {
+    // imposta range default: mese corrente
+    const pad = n => String(n).padStart(2,'0');
+    statsFromDate = `${viewYear}-${pad(viewMonth)}-01`;
+    const lastDay = new Date(viewYear, viewMonth, 0).getDate();
+    statsToDate   = `${viewYear}-${pad(viewMonth)}-${pad(lastDay)}`;
+  }
+  renderStats(currentUser());
+}
+function setStatsType(t)     { statsType = t;     renderStats(currentUser()); }
 function setStatsCategory(c) { statsCategory = c; renderStats(currentUser()); }
 
-// Calcola ferie e permessi maturati nel periodo selezionato
+function statsNavPrev() {
+  if (statsPeriod === 'month') {
+    viewMonth--; if (viewMonth < 1) { viewMonth = 12; viewYear--; }
+  } else if (statsPeriod === 'year') {
+    viewYear--;
+  }
+  renderStats(currentUser());
+}
+function statsNavNext() {
+  if (statsPeriod === 'month') {
+    viewMonth++; if (viewMonth > 12) { viewMonth = 1; viewYear++; }
+  } else if (statsPeriod === 'year') {
+    viewYear++;
+  }
+  renderStats(currentUser());
+}
+
 function getMaturatoPeriodo(user, period) {
   if (period === 'month') {
     const m = getMonthMat(user, viewYear, viewMonth);
@@ -3443,172 +3489,226 @@ function getMaturatoPeriodo(user, period) {
     const m = getAnnualMat(user, viewYear);
     return { ferie: m.ferie, permessi: m.permessi };
   }
-  // 'total': somma da anno più vecchio configurato fino ad oggi
-  const siDate = getSaldoInizDate(user);
-  let startYear;
-  if (siDate) {
-    startYear = siDate.getFullYear();
-  } else if (user.dataInizioContratto) {
-    startYear = new Date(user.dataInizioContratto).getFullYear();
-  } else {
-    const years = Object.keys(user.anni || {}).map(Number);
-    startYear = years.length ? Math.min(...years) : viewYear;
+  if (period === 'custom') {
+    if (!statsFromDate || !statsToDate) return { ferie: 0, permessi: 0 };
+    const from = new Date(statsFromDate + 'T00:00:00');
+    const to   = new Date(statsToDate   + 'T23:59:59');
+    const fromY = from.getFullYear(), fromM = from.getMonth() + 1;
+    const toY   = to.getFullYear(),   toM   = to.getMonth() + 1;
+    let ferieT = 0, permT = 0;
+    for (let y = fromY; y <= toY; y++) {
+      const mStart = (y === fromY) ? fromM : 1;
+      const mEnd   = (y === toY)   ? toM   : 12;
+      for (let m = mStart; m <= mEnd; m++) {
+        const mat = getMonthMat(user, y, m);
+        ferieT += mat.ferie;
+        permT  += mat.permessi;
+      }
+    }
+    return { ferie: +ferieT.toFixed(2), permessi: +permT.toFixed(2) };
   }
+  // 'total'
+  const siDate = getSaldoInizDate(user);
+  let startYear = siDate ? siDate.getFullYear()
+    : user.dataInizioContratto ? new Date(user.dataInizioContratto).getFullYear()
+    : Math.min(...Object.keys(user.anni || {}).map(Number).filter(n=>n), viewYear);
   const endYear = getEffectiveToday().year;
   let ferieT = 0, permT = 0;
   for (let y = startYear; y <= endYear; y++) {
     const m = getAnnualMat(user, y);
-    ferieT += m.ferie;
-    permT  += m.permessi;
+    ferieT += m.ferie; permT += m.permessi;
   }
   return { ferie: +ferieT.toFixed(2), permessi: +permT.toFixed(2) };
 }
 
-function pct(part, total) {
-  if (!total) return '0%';
-  return Math.round(part / total * 100) + '%';
-}
-
 function renderStats(user) {
   const container = document.getElementById('statsContainer');
-  const entries = getStatsEntries(user, statsPeriod);
-  const calcMode = parseFloat(user.calcMode || '1');
-  const obb = computeObbligateStats(entries, calcMode);
-  const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory, user);
-  const WD = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
-  const maxCount = Math.max(1, ...weekdayCounts);
+  const entries   = getStatsEntries(user, statsPeriod);
+  const calcMode  = parseFloat(user.calcMode || '1');
+  const obb       = computeObbligateStats(entries, calcMode);
+  const WD        = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
 
-  const periodLabel = statsPeriod === 'month'
-    ? MONTHS[viewMonth-1] + ' ' + viewYear
-    : statsPeriod === 'year' ? 'Anno ' + viewYear : 'Storico completo';
+  // Etichetta periodo
+  let periodLabel;
+  if (statsPeriod === 'month')  periodLabel = MONTHS[viewMonth-1] + ' ' + viewYear;
+  else if (statsPeriod === 'year')  periodLabel = String(viewYear);
+  else if (statsPeriod === 'total') periodLabel = 'Storico totale';
+  else if (statsPeriod === 'custom') {
+    periodLabel = statsFromDate && statsToDate
+      ? statsFromDate.split('-').reverse().join('/') + ' → ' + statsToDate.split('-').reverse().join('/')
+      : 'Periodo personalizzato';
+  }
 
-  const pillBtn = (active, label, onclick) =>
-    `<button onclick="${onclick}" style="padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid ${active?'#a78bfa':'var(--border)'};background:${active?'rgba(167,139,250,.15)':'transparent'};color:${active?'#a78bfa':'var(--text3)'};cursor:pointer;white-space:nowrap">${label}</button>`;
+  // ── Header ──
+  let html = `<div style="padding:6px 0 8px">`;
 
-  let html = `
-  <div style="margin-top:14px">
-    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px">📊 Statistiche — ${periodLabel}</div>
+  // Selettore periodo
+  html += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">`;
+  [['month','📅 Mese'],['year','📅 Anno'],['total','🗂 Totale'],['custom','✂️ Custom']].forEach(([p,l])=>{
+    const a = statsPeriod === p;
+    html += `<button onclick="setStatsPeriod('${p}')" style="padding:5px 12px;border-radius:14px;border:2px solid ${a?'var(--accent-f)':'var(--border)'};background:${a?'rgba(74,222,128,.15)':'var(--surface2)'};color:${a?'var(--accent-f)':'var(--text2)'};font-size:12px;font-weight:700;cursor:pointer">${l}</button>`;
+  });
+  html += `</div>`;
 
-    <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px">
-      ${pillBtn(statsPeriod==='month', '📅 Mese', "setStatsPeriod('month')")}
-      ${pillBtn(statsPeriod==='year',  '📆 Anno', "setStatsPeriod('year')")}
-      ${pillBtn(statsPeriod==='total', '🗂️ Totale', "setStatsPeriod('total')")}
-    </div>
-  </div>`;
-
-  // ── Sezione Obbligate vs Richieste ──
-  const renderTypeBlock = (label, icon, color, data, unit) => {
-    const totEp  = data.obbEp + data.richEp;
-    const totQty = +(data.obbQty + data.richQty).toFixed(2);
-    if (totEp === 0) {
-      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:4px">${icon} ${label}</div>
-        <div style="font-size:11px;color:var(--text3)">Nessuna voce in questo periodo</div>
-      </div>`;
-    }
-    // Percentuali calcolate sui GIORNI/ORE (non sugli episodi)
-    const obbPctQty  = pct(data.obbQty, totQty);
-    const richPctQty = pct(data.richQty, totQty);
-    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
-      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;background:var(--surface3)">
-        <div style="width:${obbPctQty};background:var(--accent-sim)"></div>
-        <div style="width:${richPctQty};background:${color}"></div>
+  // Navigazione (solo per mese/anno)
+  if (statsPeriod === 'month' || statsPeriod === 'year') {
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <button onclick="statsNavPrev()" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>
+      <div style="flex:1;text-align:center;font-weight:700;font-size:15px;color:var(--text)">${periodLabel}</div>
+      <button onclick="statsNavNext()" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>
+    </div>`;
+  } else if (statsPeriod === 'custom') {
+    // Date pickers per periodo personalizzato
+    html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:130px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">DA</div>
+        <input type="date" value="${statsFromDate}" onchange="statsFromDate=this.value;renderStats(currentUser())" class="form-input" style="width:100%;font-size:12px">
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-        <span style="color:var(--accent-sim)">🏢 Obbligate: <strong>${fmt(+data.obbQty.toFixed(2), unit)}</strong> (${obbPctQty}) · ${data.obbEp} episodi</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
-        <span style="color:${color}">👤 Richieste: <strong>${fmt(+data.richQty.toFixed(2), unit)}</strong> (${richPctQty}) · ${data.richEp} episodi</span>
-      </div>
-      <div style="font-size:10px;color:var(--text3);border-top:1px solid var(--border);padding-top:6px">
-        Totale: ${fmt(totQty, unit)} · ${totEp} episodi
+      <div style="flex:1;min-width:130px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">A</div>
+        <input type="date" value="${statsToDate}" onchange="statsToDate=this.value;renderStats(currentUser())" class="form-input" style="width:100%;font-size:12px">
       </div>
     </div>`;
-  };
+  } else {
+    html += `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">${periodLabel}</div>`;
+  }
 
-  html += renderTypeBlock('Ferie', '🌴', 'var(--accent-f)', obb.ferie, ' gg');
-  html += renderTypeBlock('Permessi', '🕐', 'var(--accent-p)', obb.permesso, 'h');
+  // ── Intestazione sezione ──
+  html += `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">📊 STATISTICHE — ${periodLabel.toUpperCase()}</div>`;
 
-  // ── Blocco Maturate nel periodo ──
+  // ── Calcola maturato ──
   const mat = getMaturatoPeriodo(user, statsPeriod);
-  const calcMode_ = parseFloat(user.calcMode || '1');
-  const totalFerieUsed = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
-  const totalPermUsed  = +(obb.permesso.obbQty + obb.permesso.richQty + obb.pagati.qty).toFixed(2);
-  const residuoF = +(mat.ferie - totalFerieUsed / calcMode_).toFixed(2);
-  const residuoP = +(mat.permessi - totalPermUsed).toFixed(2);
-  html += `<div style="background:var(--surface2);border:1px solid rgba(74,222,128,.2);border-radius:12px;padding:14px;margin-bottom:10px">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px">📈 Maturato nel periodo</div>
-    <div style="display:flex;gap:8px">
-      <div style="flex:1;background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🌴 Ferie maturate</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-f)">${fmt(mat.ferie, ' gg')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">usate ${fmt(+(totalFerieUsed/calcMode_).toFixed(2), ' gg')}</div>
-      </div>
-      <div style="flex:1;background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🕐 Permessi maturati</div>
-        <div style="font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent-p)">${fmt(mat.permessi, 'h')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">usati ${fmt(totalPermUsed, 'h')}</div>
-      </div>
-    </div>
-    ${statsPeriod !== 'total' && (mat.ferie > 0 || mat.permessi > 0) ? `
-    <div style="margin-top:8px;display:flex;gap:6px;font-size:11px">
-      <span style="flex:1;text-align:center;color:${residuoF>=0?'var(--accent-f)':'var(--danger)'}">Δ ferie: ${fmt(residuoF,' gg')}</span>
-      <span style="flex:1;text-align:center;color:${residuoP>=0?'var(--accent-p)':'var(--danger)'}">Δ permessi: ${fmt(residuoP,'h')}</span>
-    </div>` : ''}
-  </div>`;
+  const ferieMatEff = +(mat.ferie * calcMode).toFixed(2); // in gg effettivi (×1.2 se CCNL)
+  const ferieUsedEff = +(obb.ferie.obbQty + obb.ferie.richQty).toFixed(2);
+  const ferieDelta   = +(ferieMatEff - ferieUsedEff).toFixed(2);
+  const permMat      = +mat.permessi.toFixed(2);
+  const permUsedTot  = +(obb.permesso.obbQty + obb.permesso.richQty).toFixed(2);
+  const permDelta    = +(permMat - permUsedTot).toFixed(2);
 
-  // Blocco permessi liquidati
+  // ── Blocco FERIE ──
+  const fTot = obb.ferie.obbQty + obb.ferie.richQty;
+  const fTotEp = obb.ferie.obbEp + obb.ferie.richEp;
+  html += renderTypeBlockNew('Ferie', '🌴', 'var(--accent-f)',
+    obb.ferie, fTot, fTotEp, ferieMatEff, ferieDelta, ' gg', calcMode);
+
+  // ── Blocco PERMESSI ──
+  const pTot = obb.permesso.obbQty + obb.permesso.richQty;
+  const pTotEp = obb.permesso.obbEp + obb.permesso.richEp;
+  html += renderTypeBlockNew('Permessi', '🕐', 'var(--accent-p)',
+    obb.permesso, pTot, pTotEp, permMat, permDelta, 'h', 1);
+
+  // ── Blocco PAGATI (se presenti) ──
   if (obb.pagati.ep > 0) {
     html += `<div style="background:var(--surface2);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;color:var(--accent-sim);margin-bottom:8px">💰 Permessi Liquidati</div>
-      <div style="font-size:12px;color:var(--text2)">
-        <strong>${fmt(+obb.pagati.qty.toFixed(2), 'h')}</strong> liquidati in busta paga · ${obb.pagati.ep} episodi
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
-        Non conteggiate come permessi goduti — scalate dal saldo disponibile
-      </div>
+      <div style="font-size:14px;color:var(--text2)"><strong>${fmt(+obb.pagati.qty.toFixed(2),'h')}</strong> liquidati · ${obb.pagati.ep} episodi</div>
     </div>`;
   }
 
-  // ── Sezione Distribuzione giorni della settimana ──
-  html += `
-  <div style="margin-top:18px">
-    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;margin-bottom:8px">📆 Distribuzione Giorni Settimana</div>
-    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-      ${pillBtn(statsType==='tutti',    'Ferie+Permessi', "setStatsType('tutti')")}
-      ${pillBtn(statsType==='ferie',    '🌴 Ferie',        "setStatsType('ferie')")}
-      ${pillBtn(statsType==='permesso', '🕐 Permessi',     "setStatsType('permesso')")}
-    </div>
-    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-      ${pillBtn(statsCategory==='tutte',     'Tutte',     "setStatsCategory('tutte')")}
-      ${pillBtn(statsCategory==='obbligate', '🏢 Obbligate', "setStatsCategory('obbligate')")}
-      ${pillBtn(statsCategory==='richieste', '👤 Richieste', "setStatsCategory('richieste')")}
-    </div>
-  </div>
-  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 14px 4px;margin-bottom:24px">`;
-
-  const totalDays = weekdayCounts.reduce((a,b) => a+b, 0);
-  if (totalDays === 0) {
-    html += `<div style="font-size:11px;color:var(--text3);padding-bottom:10px">Nessun giorno in questo periodo con i filtri selezionati</div>`;
-  } else {
-    WD.forEach((label, i) => {
-      const count = weekdayCounts[i];
-      const barPct = Math.round(count / maxCount * 100);
-      html += `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:3px">
-          <span>${label}</span><span style="font-family:'DM Mono',monospace;font-weight:700">${count}</span>
-        </div>
-        <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
-          <div style="width:${barPct}%;height:100%;background:#a78bfa;border-radius:3px"></div>
-        </div>
-      </div>`;
-    });
-    html += `<div style="font-size:10px;color:var(--text3);padding:4px 0 10px">Totale giorni conteggiati: ${totalDays}</div>`;
-  }
+  // ── DISTRIBUZIONE GIORNI SETTIMANA ──
+  const weekdayCounts = computeWeekdayStats(entries, statsType, statsCategory, user);
+  const maxCount = Math.max(1, ...weekdayCounts);
+  html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px">📅 Distribuzione Giorni Settimana</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">`;
+  [['tutti','Ferie+Permessi'],['ferie','🌴 Ferie'],['permesso','🕐 Permessi']].forEach(([t,l])=>{
+    const a = statsType === t;
+    html += `<button onclick="setStatsType('${t}')" style="padding:4px 10px;border-radius:12px;border:2px solid ${a?'var(--accent-f)':'var(--border)'};background:${a?'rgba(74,222,128,.12)':'transparent'};color:${a?'var(--accent-f)':'var(--text3)'};font-size:11px;font-weight:700;cursor:pointer">${l}</button>`;
+  });
+  html += `</div><div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">`;
+  [['tutte','Tutte'],['obbligate','🏢 Obbligate'],['richieste','👤 Richieste']].forEach(([c,l])=>{
+    const a = statsCategory === c;
+    html += `<button onclick="setStatsCategory('${c}')" style="padding:4px 10px;border-radius:12px;border:2px solid ${a?'var(--accent-sim)':'var(--border)'};background:${a?'rgba(245,158,11,.12)':'transparent'};color:${a?'var(--accent-sim)':'var(--text3)'};font-size:11px;font-weight:700;cursor:pointer">${l}</button>`;
+  });
+  html += `</div>`;
+  let totalDays = 0;
+  weekdayCounts.forEach((count, i) => {
+    if (!count) return;
+    totalDays += count;
+    const barPct = Math.round(count / maxCount * 100);
+    html += `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:3px">
+        <span>${WD[i]}</span><span style="font-family:'DM Mono',monospace;font-weight:700">${count}</span>
+      </div>
+      <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
+        <div style="width:${barPct}%;height:100%;background:#a78bfa;border-radius:3px"></div>
+      </div>
+    </div>`;
+  });
+  if (totalDays) html += `<div style="font-size:10px;color:var(--text3);padding:4px 0 2px">Totale giorni: ${totalDays}</div>`;
   html += `</div>`;
 
+  // ── LISTA EVENTI CRONOLOGICA ──
+  const evtEntries = entries.filter(e =>
+    e.tipo === 'ferie' || e.tipo === 'permesso' || e.tipo === 'permesso_pagato'
+  ).sort((a, b) => (a.dateFrom||'').localeCompare(b.dateFrom||''));
+
+  if (evtEntries.length) {
+    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px">📋 Eventi del periodo (${evtEntries.length})</div>`;
+    evtEntries.forEach(e => {
+      const isFerie = e.tipo === 'ferie';
+      const isPag   = e.tipo === 'permesso_pagato';
+      const color   = isFerie ? 'var(--accent-f)' : isPag ? 'var(--accent-sim)' : 'var(--accent-p)';
+      const icon    = isFerie ? '🌴' : isPag ? '💰' : '🕐';
+      const qty     = isFerie ? fmt(+(e.qty * calcMode).toFixed(2), ' gg') : fmt(e.qty, 'h');
+      const dates   = e.dateTo && e.dateTo !== e.dateFrom ? `${e.dateFrom} → ${e.dateTo}` : e.dateFrom || '';
+      const obbBadge = e.obbligata ? `<span style="font-size:9px;background:rgba(245,158,11,.15);color:var(--accent-sim);padding:1px 5px;border-radius:6px;margin-left:4px">🏢</span>` : '';
+      const tagBadges = (e.tags||[]).map(tid=>{
+        const tag=(user.tags||[]).find(t=>t.id===tid);
+        return tag?`<span style="font-size:9px;background:${tag.color}22;color:${tag.color};padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid ${tag.color}55">${tag.name}</span>`:'';
+      }).join('');
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:16px">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;color:var(--text)">${e.note||isFerie?'Ferie':'Permesso'}${obbBadge}${tagBadges}</div>
+          <div style="font-size:11px;color:var(--text3)">${dates}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;color:${color};white-space:nowrap">${qty}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
   container.innerHTML = html;
+}
+
+// Helper: blocco ferie/permessi con totale/maturato/delta integrati
+function renderTypeBlockNew(label, icon, color, obb, totQty, totEp, matEff, delta, unit, calcMode) {
+  const totObb = obb.obbQty, totRich = obb.richQty;
+  const totAll = totObb + totRich;
+  if (totAll === 0 && matEff === 0) return '';
+  const pObb  = totAll > 0 ? Math.round(totObb / totAll * 100) : 0;
+  const pRich = 100 - pObb;
+  const deltaColor = delta >= 0 ? 'var(--accent-f)' : 'var(--danger)';
+  const deltaSign  = delta >= 0 ? '+' : '';
+  return `
+  <div style="background:var(--surface2);border:1px solid ${color}44;border-radius:12px;padding:14px;margin-bottom:10px">
+    <div style="font-size:14px;font-weight:700;color:${color};margin-bottom:10px">${icon} ${label}</div>
+    ${totAll > 0 ? `
+    <div style="height:8px;border-radius:4px;background:var(--surface3);overflow:hidden;margin-bottom:10px;display:flex">
+      <div style="width:${pObb}%;background:var(--accent-sim);border-radius:4px 0 0 4px"></div>
+      <div style="width:${pRich}%;background:${color};border-radius:0 4px 4px 0"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">🏢 Obbligate: <strong>${fmt(+totObb.toFixed(2),unit)}</strong> (${pObb}%) · ${obb.obbEp} episodi</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">👤 Richieste: <strong>${fmt(+totRich.toFixed(2),unit)}</strong> (${pRich}%) · ${obb.richEp} episodi</div>
+    ` : ''}
+    <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--text3)">Totale utilizzato</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text)">${fmt(+totQty.toFixed(2),unit)} · ${totEp} ep.</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--text3)">Maturato</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${color}">${fmt(matEff,unit)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:${delta>=0?'rgba(74,222,128,.08)':'rgba(239,68,68,.08)'};border-radius:8px;padding:6px 10px">
+        <span style="font-size:12px;font-weight:700;color:${deltaColor}">Δ Delta</span>
+        <span style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;color:${deltaColor}">${deltaSign}${fmt(+Math.abs(delta).toFixed(2),unit)}</span>
+      </div>
+    </div>
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════
