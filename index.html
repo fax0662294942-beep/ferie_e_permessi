@@ -2246,9 +2246,9 @@ function renderSummary(user) {
     document.getElementById('ppPagate').textContent = fmt(t.prevPermPagati,  'h');
   }
 
-  document.getElementById('fcMat').textContent    = fmtGG(t.ferieMat,    calcMode);
+  document.getElementById('fcMat').innerHTML = fmtGG(t.ferieMat,    calcMode);
   document.getElementById('fcUsed').innerHTML = fmtGG(t.ferieUsed,   calcMode);
-  document.getElementById('fcRes').textContent    = fmtGG(t.ferieRes,    calcMode);
+  document.getElementById('fcRes').innerHTML = fmtGG(t.ferieRes,    calcMode);
   document.getElementById('pcMat').textContent    = fmt(t.permessiMat,     'h');
   document.getElementById('pcUsed').textContent   = fmt(t.permessiGoduti,  'h');
   document.getElementById('pcPagate').textContent = fmt(t.permessiPagati,  'h');
@@ -2299,7 +2299,7 @@ function renderMonthInfo(user) {
   document.getElementById('mSaldoInizioPerm').textContent  = fmt(saldo.saldoInizioP,  'h');
   document.getElementById('mMaturazioneFerie').innerHTML = fmtGG(mat.ferie,           calcMode);
   document.getElementById('mMaturazionePerm').textContent  = fmt(mat.permessi,         'h');
-  document.getElementById('mUsateFerie').textContent       = fmtGG(used.ferieUsed,     calcMode);
+  document.getElementById('mUsateFerie').innerHTML = fmtGG(used.ferieUsed,     calcMode);
   document.getElementById('mUsatePerm').textContent        = fmt(used.permGoduti,      'h');
   document.getElementById('mPagatiPerm').textContent       = fmt(used.permPagati,      'h');
   document.getElementById('mSaldoFineFerie').innerHTML = fmtGG(saldo.saldoFineF,   calcMode);
