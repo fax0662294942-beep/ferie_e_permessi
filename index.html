@@ -2218,10 +2218,10 @@ function renderHeaderUI(user) {
 }
 
 function renderSummary(user) {
-  const simMode = currentTab === 'simulazione';
-  // getYearTotals(user, year) now contains both prev and curr data for viewYear
-  const t = getYearTotals(user, viewYear, simMode);
-  const calcLabel = parseFloat(user.calcMode||'1') === 1.2 ? ' (×1.2)' : '';
+  const simMode  = currentTab === 'simulazione';
+  const t        = getYearTotals(user, viewYear, simMode);
+  const calcMode = parseFloat(user.calcMode || '1');
+  const calcLabel = calcMode === 1.2 ? ' (×1.2)' : '';
 
   document.getElementById('currYearLabelF').textContent = viewYear;
   document.getElementById('currYearLabelP').textContent = viewYear;
