@@ -1800,56 +1800,72 @@ function getSaldoInizDate(user) {
     : null;
 }
 
-function getAnnualMat(user, year) {
-  const cfg = getAnnoCfg(user, String(year));
-  const eff = getEffectiveToday(); // usa "oggi simulato" in tab Simulazione
-  let meseInizio = 1;
+/*
+ * Regola dei 15 giorni (CCNL standard italiano):
+ * Un mese matura intero SE il dipendente ha lavorato almeno 15 giorni di calendario.
+ * - Mese di assunzione: matura se assunti entro il 15 (giorno ≤ 15)
+ * - Mese corrente (in corso): matura solo se oggi ≥ 15
+ * - Mesi passati completi: maturano sempre
+ */
+function monthAccrues(user, year, month) {
+  // 1. Controlla data inizio (assunzione o saldo iniziale) — stesso anno
+  let startDay = 1; // default: assunti dal 1° del mese
   if (user.dataInizioContratto) {
     const d = new Date(user.dataInizioContratto);
-    if (d.getFullYear() > year) return { ferie: 0, permessi: 0 };
-    if (d.getFullYear() === year) meseInizio = d.getMonth() + 1;
+    if (d.getFullYear() > year) return false;
+    if (d.getFullYear() === year && d.getMonth() + 1 > month) return false;
+    if (d.getFullYear() === year && d.getMonth() + 1 === month) startDay = d.getDate();
   }
   const siDate = getSaldoInizDate(user);
   if (siDate) {
-    const siYear = siDate.getFullYear();
-    if (siYear > year) return { ferie: 0, permessi: 0 };
-    if (siYear === year) meseInizio = Math.max(meseInizio, siDate.getMonth() + 1);
+    const siy = siDate.getFullYear(), sim_ = siDate.getMonth() + 1;
+    if (siy > year) return false;
+    if (siy === year && sim_ > month) return false;
+    if (siy === year && sim_ === month) startDay = Math.max(startDay, siDate.getDate());
   }
-  let meseFine;
-  if (year < eff.year) meseFine = 12;
-  else if (year > eff.year) meseFine = 0;
-  else meseFine = eff.month;
-  if (meseFine < meseInizio) return { ferie: 0, permessi: 0 };
+  // Se il mese inizia dopo il 15 → non matura
+  if (startDay > 15) return false;
 
-  const mesiLav = meseFine - meseInizio + 1;
-  const ferieAnnua = +((cfg.ferieAnnue || 0) / 12 * mesiLav).toFixed(2);
-  let permTot = 0;
-  for (let m = meseInizio; m <= meseFine; m++) {
-    permTot += getPermessiOrePerMese(user, year, m);
+  // 2. Mese corrente (o simulato): matura solo se siamo al 15° giorno o oltre
+  const eff = getEffectiveToday();
+  if (year > eff.year) return false;
+  if (year === eff.year && month > eff.month) return false;
+  if (year === eff.year && month === eff.month) {
+    // Mese in corso: controlla se siamo oltre il 15
+    // In sim mode, eff.month = viewMonth → consideriamo il 15 già passato se siamo in simulazione
+    // (la simulazione ipotizza di essere a fine mese)
+    if (!simToday) {
+      const today = new Date();
+      if (today.getDate() < 15) return false;
+    }
+    // In sim mode: il mese simulato si considera sempre maturato (siamo "a fine mese")
   }
-  return { ferie: ferieAnnua, permessi: +permTot.toFixed(2) };
+  return true;
 }
 
-// Maturazione di un singolo mese
-function getMonthMat(user, year, month) {
+function getAnnualMat(user, year) {
   const cfg = getAnnoCfg(user, String(year));
-  // In tab Simulazione: mesi futuri rispetto al mese visualizzato → nessuna maturazione
-  if (simToday) {
-    const eff = getEffectiveToday();
-    if (year > eff.year) return { ferie: 0, permessi: 0 };
-    if (year === eff.year && month > eff.month) return { ferie: 0, permessi: 0 };
+  const eff = getEffectiveToday();
+  // Anno oltre l'orizzonte: niente
+  if (year > eff.year) return { ferie: 0, permessi: 0 };
+
+  // Itera mese per mese applicando la regola dei 15 giorni
+  let ferieAnnua = 0;
+  let permTot    = 0;
+  const meseFine = (year < eff.year) ? 12 : eff.month;
+  for (let m = 1; m <= meseFine; m++) {
+    if (monthAccrues(user, year, m)) {
+      ferieAnnua += (cfg.ferieAnnue || 0) / 12;
+      permTot    += getPermessiOrePerMese(user, year, m);
+    }
   }
-  if (user.dataInizioContratto) {
-    const d = new Date(user.dataInizioContratto);
-    if (year < d.getFullYear()) return { ferie: 0, permessi: 0 };
-    if (year === d.getFullYear() && month < d.getMonth() + 1) return { ferie: 0, permessi: 0 };
-  }
-  const siDate = getSaldoInizDate(user);
-  if (siDate) {
-    const siYear = siDate.getFullYear(), siMonth = siDate.getMonth() + 1;
-    if (year < siYear) return { ferie: 0, permessi: 0 };
-    if (year === siYear && month < siMonth) return { ferie: 0, permessi: 0 };
-  }
+  return { ferie: +ferieAnnua.toFixed(2), permessi: +permTot.toFixed(2) };
+}
+
+// Maturazione di un singolo mese (rispetta regola dei 15 giorni)
+function getMonthMat(user, year, month) {
+  if (!monthAccrues(user, year, month)) return { ferie: 0, permessi: 0 };
+  const cfg = getAnnoCfg(user, String(year));
   return {
     ferie:    +((cfg.ferieAnnue || 0) / 12).toFixed(4),
     permessi: +getPermessiOrePerMese(user, year, month).toFixed(4)
@@ -2041,7 +2057,7 @@ function getMonthSaldo(user, year, month, simMode) {
   // Base di partenza: saldo anni precedenti cumulativo
   const prevRes = getResiduoAnniPrecedenti(user, year);
 
-  // Accumula da gennaio fino al mese precedente (per ottenere saldoFine(month-1))
+  // Accumula da gennaio fino al mese precedente (saldoFine(month-1))
   let saldoF = prevRes.ferie;
   let saldoP = prevRes.permessi;
   for (let m = 1; m < month; m++) {
@@ -2050,16 +2066,19 @@ function getMonthSaldo(user, year, month, simMode) {
     saldoF = +(saldoF + mm.ferie    - mu.ferieUsed).toFixed(2);
     saldoP = +(saldoP + mm.permessi - mu.permUsed).toFixed(2);
   }
-  // saldoF/saldoP ora = saldoFineMese(month-1) (= prevRes se month==1)
 
+  // Maturato e utilizzato del mese corrente
   const thisMat  = getMonthMat(user, year, month);
   const thisUsed = getMonthUsed(user, year, month, simMode);
 
-  const saldoInizioF = +(saldoF + thisMat.ferie).toFixed(2);
-  const saldoInizioP = +(saldoP + thisMat.permessi).toFixed(2);
+  // SALDO INIZIO MESE = saldo fine mese precedente (NON include il maturato del mese corrente)
+  // Il maturato del mese corrente appare nella riga "Maturate mese" separata
+  const saldoInizioF = +saldoF.toFixed(2);
+  const saldoInizioP = +saldoP.toFixed(2);
 
-  const saldoFineF = +(saldoInizioF - thisUsed.ferieUsed).toFixed(2);
-  const saldoFineP = +(saldoInizioP - thisUsed.permUsed).toFixed(2);
+  // SALDO FINE MESE = inizio + maturato - utilizzato
+  const saldoFineF = +(saldoInizioF + thisMat.ferie    - thisUsed.ferieUsed).toFixed(2);
+  const saldoFineP = +(saldoInizioP + thisMat.permessi - thisUsed.permUsed).toFixed(2);
 
   return {
     saldoInizioF, saldoInizioP,
