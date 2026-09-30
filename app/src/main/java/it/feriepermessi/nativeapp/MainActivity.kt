@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -13,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity:ComponentActivity(){
  private val back=BackPressController()
  override fun onCreate(savedInstanceState:Bundle?){ super.onCreate(savedInstanceState); setContent {
@@ -22,6 +24,7 @@ class MainActivity:ComponentActivity(){
  }}
 }
 enum class Screen { Home, Calendar, Stats, Settings }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable fun FeriePermessiApp(onHint:()->Unit={},onExit:()->Unit={},back:BackPressController=BackPressController()){
  var screenName by rememberSaveable{mutableStateOf(Screen.Home.name)}; val screen=Screen.valueOf(screenName)
  BackHandler { if(screen!=Screen.Home){screenName=Screen.Home.name;back.reset()} else when(back.onHomeBack()){BackAction.ShowHint->onHint();BackAction.Exit->onExit()} }
