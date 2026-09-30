@@ -31,8 +31,8 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 
 ## Roadmap
 - [x] B0 — inspect PWA and Factory; establish native branch and migration contract.
-- [ ] B1 — transplant Factory Android skeleton and CI, rename application/package, establish green baseline.
-- [ ] B2 — native domain model + Room schema for users/configuration/entries/tags/special leave/time bank.
+- [x] B1 — transplant Factory Android skeleton and CI, rename application/package, establish green baseline.
+- [x] B2 — native domain model + Room schema for users/configuration/entries/tags/special leave/time bank.
 - [ ] B3 — port deterministic accrual/calendar/business-rule engine with unit tests.
 - [ ] B4 — Home/month summary + entry CRUD.
 - [ ] B5 — calendar, simulation, liquidation, special leave and time bank.
@@ -51,3 +51,13 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Room exportSchema enabled; generated schema must be checked in after the authoritative build. No destructive migration fallback.
 - PWA baseline inspected directly at main:index.html; no legacy files changed.
 - B1/B2 closure pending build + emulator gate and exported schema verification.
+
+## B1/B2 closed
+- Action #4 (run 36753384138), commit 89a9dc1da185680871fc0408d53faf838ba6dfb0: build/lint/JVM and API 35 emulator all green.
+- Exported Room v1 schema checked in. Room test covers all entry kinds, negative initial leave, per-user identity isolation and cascading tag links.
+- Compose regression verifies back from Calendar to Home, first Back hint, second Back exit. The test waits for recomposition before dispatching Back.
+
+## B3 awaiting gate
+- Injected-date deterministic engine ports PWA monthly allocation, 15-day gate, 24/48-month CCNL thresholds, FIFO, carry-forward (leave debt retained), liquidation, initial-date filtering, simulation, special leave, time bank, workdays and holidays.
+- Differential expected values generated read-only by tools/pwa-oracle.cjs against main:index.html.
+- Eight business-rule unit tests added, including the original PWA oracle fixture.
