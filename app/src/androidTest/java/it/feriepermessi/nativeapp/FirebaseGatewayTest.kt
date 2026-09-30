@@ -44,10 +44,10 @@ class FirebaseGatewayTest {
         val (adminApp,admin)=gateway();val (userApp,user)=gateway()
         val db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(),NativeDatabase::class.java).build()
         try {
-            admin.auth.signInAnonymously().await();val aid=requireNotNull(admin.identity())
+            admin.signIn("""{"sub":"admin-${UUID.randomUUID()}","email":"admin@example.invalid","email_verified":true}""");val aid=requireNotNull(admin.identity())
             assertEquals(PwaCloudContract.Access.Pending,admin.approval(aid).access)
             admin.claimAdmin(aid);assertTrue(admin.approval(aid).admin)
-            user.auth.signInAnonymously().await();val uid=requireNotNull(user.identity())
+            user.signIn("""{"sub":"user-${UUID.randomUUID()}","email":"user@example.invalid","email_verified":true}""");val uid=requireNotNull(user.identity())
             assertEquals(PwaCloudContract.Access.Pending,user.approval(uid).access)
             try {user.fetch(uid.uid);fail("Pending user accessed data")}catch(_:FirebaseFirestoreException){}
             admin.adminStatus(aid.uid,uid.uid,"approved")
