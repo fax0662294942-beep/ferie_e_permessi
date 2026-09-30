@@ -82,3 +82,8 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Android SAF create/open documents, bounded file reads and complete validation before atomic Room writes. Import adds independent profiles with remapped IDs and never replaces existing local users.
 - Native transactional restore infrastructure and permanent unit/emulator round-trip, malformed-input, identity-isolation and preservation regressions.
 - No live user data or PWA files modified.
+
+## B8 preparation / human configuration checkpoint
+- Inspected the original PWA Firebase collection names, approval registry, admin authority and sync format. Added a side-effect-free PWA payload adapter and fail-closed access tests.
+- Live Android authentication is blocked by missing Android Firebase registration/OAuth configuration and a persistent candidate signing certificate. See docs/FIREBASE_SETUP.md for the concrete setup handoff.
+- B8 remains unchecked; no real cloud writes, production release or main-branch changes.
