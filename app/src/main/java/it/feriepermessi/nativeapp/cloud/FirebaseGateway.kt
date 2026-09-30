@@ -63,9 +63,15 @@ class FirebaseGateway(val auth:FirebaseAuth=FirebaseAuth.getInstance(),val fires
         require(if(adminOnly) uid in admins else uid in admins || reg.getString("status")=="approved") {"Accesso non autorizzato"}
         return admins
     }
-    suspend fun publish(uid:String,expected:CloudDocument,snapshot:NativeSnapshot) {
+    suspend fun publish(uid:String,expected:CloudDocument,snapshot:NativeSnapshot,mayPublish:()->Boolean={true}) {
+        ensureIdentity(uid);require(mayPublish()) {"Sincronizzazione sospesa"}
+        // Do not enqueue a transaction when offline. A later reconnect must require a fresh decision after a failed sync.
+        val online=fetch(uid)
+        if(online.fingerprint!=expected.fingerprint) throw CloudConflict()
+        require(mayPublish()) {"Sincronizzazione sospesa"}
         val fresh=Json.parseToJsonElement(PwaCloudContract.encode(snapshot)).jsonObject
         firestore.runTransaction {tx ->
+            require(mayPublish()) {"Sincronizzazione sospesa"}
             approved(tx,uid)
             val latest=tx.get(data(uid))
             val raw=if(latest.exists()) element(latest.data).jsonObject else null
@@ -77,7 +83,8 @@ class FirebaseGateway(val auth:FirebaseAuth=FirebaseAuth.getInstance(),val fires
             // Retain native Timestamp, GeoPoint, Blob and DocumentReference values in unknown fields.
             val update=CloudPayload.mergeValues(latest.data.orEmpty(),fields).toMutableMap()
             update["lastModified"]=FieldValue.serverTimestamp()
-            ensureIdentity(uid);tx.set(data(uid),update,SetOptions.merge());null
+            ensureIdentity(uid);require(mayPublish()) {"Sincronizzazione sospesa"}
+            tx.set(data(uid),update,SetOptions.merge());null
         }.await()
         ensureIdentity(uid)
     }

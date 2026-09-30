@@ -143,7 +143,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         val identity=requireNotNull(gateway.identity());require(mutable.value.access==PwaCloudContract.Access.Approved)
         val expected=requireNotNull(remoteBaseline) {"Aggiorna il confronto"}
         // Explicit UI confirmation establishes which account owns this local ledger.
-        val snapshot=repository.snapshot();gateway.publish(identity.uid,expected,snapshot)
+        val snapshot=repository.snapshot();gateway.publish(identity.uid,expected,snapshot) {current(identity.uid) && mutable.value.access==PwaCloudContract.Access.Approved}
         if(!current(identity.uid)) return@launchOperation
         repository.dao.putState(AppStateEntity("cloudBoundUid",identity.uid))
         localBaseline=localFingerprint(snapshot);remoteBaseline=gateway.fetch(identity.uid)
@@ -169,7 +169,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         try {
             require(repository.dao.state("cloudBoundUid")==identity.uid) {"Collega prima questo account ai dati locali"}
             val snapshot=repository.snapshot()
-            gateway.publish(identity.uid,requireNotNull(remoteBaseline),snapshot)
+            gateway.publish(identity.uid,requireNotNull(remoteBaseline),snapshot) {current(identity.uid) && mutable.value.linked && mutable.value.access==PwaCloudContract.Access.Approved}
             if(!current(identity.uid)) return@withLock
             localBaseline=localFingerprint(snapshot);remoteBaseline=gateway.fetch(identity.uid)
             mutable.value=mutable.value.copy(remote=remoteBaseline,message="Sincronizzato")
