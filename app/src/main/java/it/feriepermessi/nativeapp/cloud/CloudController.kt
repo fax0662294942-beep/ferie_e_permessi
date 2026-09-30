@@ -24,6 +24,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
     private val mutex=Mutex()
     private var authListener:FirebaseAuth.AuthStateListener?=null
     private var listeners=emptyList<ListenerRegistration>()
+    private var dataListener:ListenerRegistration?=null
     private var sessionUid:String?=null
     private var remoteBaseline:CloudDocument?=null
     private var localBaseline:String?=null
@@ -34,7 +35,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         val listener=FirebaseAuth.AuthStateListener {
             val identity=gateway.identity()
             if(identity?.uid!=sessionUid || mutable.value.identity==null) {
-                listeners.forEach {it.remove()};listeners=emptyList();syncJob?.cancel()
+                listeners.forEach {it.remove()};listeners=emptyList();dataListener?.remove();dataListener=null;syncJob?.cancel()
                 sessionUid=identity?.uid;remoteBaseline=null;localBaseline=null
                 mutable.value=CloudState(identity=identity,access=if(identity==null) PwaCloudContract.Access.Approved else PwaCloudContract.Access.Pending)
                 if(identity!=null) {
@@ -61,13 +62,14 @@ class CloudController(private val repository:NativeRepository,private val scope:
             if(!current(identity.uid)) return@launchOperation
             mutable.value=mutable.value.copy(access=approval.access,admin=approval.admin,mayClaim=approval.mayClaim)
             if(approval.access!=PwaCloudContract.Access.Approved) {
-                remoteBaseline=null;localBaseline=null
+                remoteBaseline=null;localBaseline=null;dataListener?.remove();dataListener=null
                 mutable.value=mutable.value.copy(linked=false,remote=null,registry=emptyList())
             } else if(remoteBaseline==null) {
                 val remote=gateway.fetch(identity.uid)
                 if(!current(identity.uid)) return@launchOperation
                 remoteBaseline=remote;mutable.value=mutable.value.copy(remote=remote)
-                listeners=listeners+gateway.watchData(identity.uid) {document,error ->
+                dataListener?.remove()
+                dataListener=gateway.watchData(identity.uid) {document,error ->
                     scope.launch {mutex.withLock {
                         if(!current(identity.uid) || mutable.value.access!=PwaCloudContract.Access.Approved) return@withLock
                         if(error!=null) {mutable.value=mutable.value.copy(message="Cloud non disponibile: ${error.message}");return@withLock}
@@ -92,7 +94,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
     fun refresh() {
         val identity=gateway.identity() ?: return
         // Remove old data listeners before another server refresh.
-        listeners.forEach {it.remove()};listeners=gateway.watchApproval(identity.uid) {refreshApproval(identity)}
+        listeners.forEach {it.remove()};dataListener?.remove();dataListener=null;listeners=gateway.watchApproval(identity.uid) {refreshApproval(identity)}
         remoteBaseline=null;refreshApproval(identity)
     }
     suspend fun login(context:Context) {
@@ -165,5 +167,5 @@ class CloudController(private val repository:NativeRepository,private val scope:
     fun setStatus(user:RegistryUser,status:String)=launchOperation {gateway.adminStatus(requireNotNull(gateway.identity()).uid,user.uid,status);loadRegistry()}
     fun setRole(user:RegistryUser,role:String)=launchOperation {gateway.adminRole(requireNotNull(gateway.identity()).uid,user.uid,role);loadRegistry()}
     fun deleteUser(user:RegistryUser)=launchOperation {gateway.adminDelete(requireNotNull(gateway.identity()).uid,user.uid);loadRegistry()}
-    fun close() {listeners.forEach {it.remove()};authListener?.let {gateway.auth.removeAuthStateListener(it)};syncJob?.cancel()}
+    fun close() {dataListener?.remove();listeners.forEach {it.remove()};authListener?.let {gateway.auth.removeAuthStateListener(it)};syncJob?.cancel()}
 }

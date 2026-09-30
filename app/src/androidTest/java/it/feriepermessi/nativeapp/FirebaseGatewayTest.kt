@@ -10,7 +10,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.*
 import it.feriepermessi.nativeapp.cloud.*
 import it.feriepermessi.nativeapp.data.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import org.junit.Assert.*
 import org.junit.Test
@@ -62,13 +63,46 @@ class FirebaseGatewayTest {
             admin.adminStatus(aid.uid,uid.uid,"rejected")
             assertEquals(PwaCloudContract.Access.Rejected,user.approval(uid).access)
             try {user.publish(uid.uid,user.fetch(uid.uid),fixture);fail("Revoked access accepted")}catch(_:Exception){}
-            // Loading cloud archives local data atomically; logout cannot erase that database.
+            // Exercise the real controller: explicit link, debounced upload, live listener, offline failure and logout.
+            admin.adminStatus(aid.uid,uid.uid,"approved")
             val r=NativeRepository(db);r.initialize();val before=r.snapshot()
-            r.restoreCloud(fixture,uid.uid)
-            val after=r.snapshot();assertEquals(fixture,after)
-            val safety=r.dao.states().single {it.key.startsWith("cloudSafety:")}
-            assertEquals(before,BackupCodec.decode(safety.value))
-            user.signOut();assertNull(user.identity());assertEquals(after,r.snapshot())
+            val controllerScope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+            val controller=CloudController(r,controllerScope,reload={},gateway=user)
+            try {
+                controller.start()
+                withTimeout(30_000) {controller.state.first {it.access==PwaCloudContract.Access.Approved && it.remote?.snapshot!=null && !it.busy}}
+                controller.useCloud()
+                withTimeout(30_000) {controller.state.first {it.linked && !it.busy}}
+                val restored=r.snapshot()
+                assertEquals(fixture.users.toSet(),restored.users.toSet())
+                assertEquals(fixture.years.toSet(),restored.years.toSet())
+                assertEquals(fixture.entries.toSet(),restored.entries.toSet())
+                assertEquals(fixture.tags.toSet(),restored.tags.toSet())
+                assertEquals(fixture.links.toSet(),restored.links.toSet())
+                assertEquals(fixture.holidays.toSet(),restored.holidays.toSet())
+                assertEquals(fixture.currentUserId,restored.currentUserId)
+                val safety=r.dao.states().first {it.key.startsWith("cloudSafety:")}
+                assertEquals(before,BackupCodec.decode(safety.value))
+                val entry=r.dao.entries("u").first {it.id=="e"}
+                r.saveEntry(entry.copy(quantity=3.0),listOf("t"));controller.localChanged()
+                withTimeout(30_000) {
+                    while(user.fetch(uid.uid).snapshot?.entries?.first {it.userId=="u" && it.id=="e"}?.quantity!=3.0) delay(100)
+                }
+                withTimeout(30_000) {controller.state.first {it.message=="Sincronizzato" && !it.busy}}
+                admin.firestore.collection(PwaCloudContract.DATA_COLLECTION).document(uid.uid).update("listenerExtension","keep").await()
+                withTimeout(30_000) {controller.state.first {it.remote?.raw?.containsKey("listenerExtension")==true}}
+                assertTrue(controller.state.value.linked)
+                user.firestore.disableNetwork().await()
+                r.saveEntry(entry.copy(quantity=4.0),listOf("t"));controller.localChanged()
+                withTimeout(30_000) {controller.state.first {!it.linked && !it.busy}}
+                assertEquals(4.0,r.dao.entries("u").first {it.id=="e"}.quantity,0.0)
+                user.firestore.enableNetwork().await()
+                assertEquals(3.0,user.fetch(uid.uid).snapshot!!.entries.first {it.userId=="u" && it.id=="e"}.quantity,0.0)
+                val after=r.snapshot()
+                user.signOut()
+                withTimeout(15_000) {controller.state.first {it.identity==null}}
+                assertNull(user.identity());assertEquals(after,r.snapshot())
+            } finally {controller.close();controllerScope.cancel()}
             admin.adminDelete(aid.uid,uid.uid)
             assertFalse(admin.firestore.collection(PwaCloudContract.REGISTRY_COLLECTION).document(uid.uid).get(Source.SERVER).await().exists())
             assertFalse(admin.firestore.collection(PwaCloudContract.DATA_COLLECTION).document(uid.uid).get(Source.SERVER).await().exists())

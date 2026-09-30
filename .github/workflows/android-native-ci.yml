@@ -24,7 +24,7 @@ jobs:
       - name: Build debug APK
         run: |
           gradle :app:assembleDebug
-          gradle :app:signingReport > app/build/outputs/apk/debug/signing-report.txt
+          gradle :app:signingReport | tee app/build/outputs/apk/debug/signing-report.txt
       - uses: actions/upload-artifact@v4
         with:
           name: FeriePermessiNative-debug
