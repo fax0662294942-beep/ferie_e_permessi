@@ -23,7 +23,7 @@ object BackupCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
     private val types = setOf("ferie","permesso","permesso_pagato","banca_accumulo","banca_fruizione","permesso_104","permesso_studio")
     fun encode(data: NativeSnapshot): String { validate(data); return json.encodeToString(BackupEnvelope(data=data)) }
-    fun decode(text: String): NativeSnapshot {
+    fun decode(text: String): NativeSnapshot = try {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "Backup troppo grande" }
         val root = json.parseToJsonElement(text).jsonObject
         val data = if (root.containsKey("format") || root.containsKey("version")) {
@@ -32,7 +32,11 @@ object BackupCodec {
             json.decodeFromJsonElement<BackupEnvelope>(root).data
         } else legacy(root)
         validate(data)
-        return data
+        data
+    } catch (e: IllegalArgumentException) {
+        throw e
+    } catch (e: Exception) {
+        throw IllegalArgumentException("Struttura backup non valida", e)
     }
     private fun legacy(root: JsonObject): NativeSnapshot {
         val users=mutableListOf<UserEntity>();val years=mutableListOf<YearConfigEntity>()
