@@ -81,8 +81,7 @@ import java.util.UUID
     Field("Nome festività",holidayName){holidayName=it};Field("Data festività (AAAA-MM-GG)",holidayDate){holidayDate=it};Toggle("Ricorrente dalla data indicata",recurring){recurring=it}
     Button({try {val date=LocalDate.parse(holidayDate);require(holidayName.isNotBlank());model?.putHoliday(HolidayEntity(u.id,UUID.randomUUID().toString(),holidayName.trim(),date.monthValue,date.dayOfMonth,recurring=recurring,fromYear=if(recurring) date.year else null,year=if(recurring) null else date.year));holidayName="";holidayError=null}catch(_:Exception){holidayError="Inserisci nome e data validi"}}) {Text("Aggiungi festività")}
     holidayError?.let {Text(it)}
-    Text("Backup e autenticazione",style=MaterialTheme.typography.titleLarge)
-    Text("Importazione e sincronizzazione saranno disponibili nei blocchi successivi.")
+    BackupContent(model)
     userDelete?.let {user -> AlertDialog(onDismissRequest={userDelete=null},title={Text("Eliminare ${user.name}?")},text={Text("Verranno eliminati solo i dati locali nativi di questo utente.")},confirmButton={TextButton({model?.action {model.repository.deleteUser(user.id)};userDelete=null}) {Text("Elimina")}},dismissButton={TextButton({userDelete=null}) {Text("Annulla")}}) }
 }
 @Composable private fun Field(label:String,value:String,onChange:(String)->Unit) {OutlinedTextField(value,onChange,label={Text(label)},singleLine=true)}

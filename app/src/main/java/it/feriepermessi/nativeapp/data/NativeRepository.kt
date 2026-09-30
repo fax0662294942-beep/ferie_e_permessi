@@ -48,4 +48,24 @@ class NativeRepository(val database: NativeDatabase) {
         dao.deleteUser(id)
         if (dao.state("currentUserId") == id) dao.putState(AppStateEntity("currentUserId",dao.users().first().id))
     }
+    suspend fun snapshot(): NativeSnapshot = database.withTransaction {
+        val users=dao.users()
+        NativeSnapshot(users,users.flatMap {dao.years(it.id)},users.flatMap {dao.entries(it.id)},
+            users.flatMap {dao.tags(it.id)},users.flatMap {dao.entryTags(it.id)},users.flatMap {dao.holidays(it.id)},
+            dao.state("currentUserId") ?: users.first().id)
+    }
+    suspend fun restore(snapshot: NativeSnapshot, replace: Boolean = false) {
+        BackupCodec.validate(snapshot) // Complete validation before any mutation.
+        database.withTransaction {
+            val remap=snapshot.users.associate {it.id to if(replace) it.id else UUID.randomUUID().toString()}
+            if(replace) {dao.clearUsers();dao.clearState()}
+            snapshot.users.forEach {dao.putUser(it.copy(id=remap.getValue(it.id)))}
+            snapshot.years.forEach {dao.putYear(it.copy(userId=remap.getValue(it.userId)))}
+            snapshot.entries.forEach {dao.putEntry(it.copy(userId=remap.getValue(it.userId)))}
+            snapshot.tags.forEach {dao.putTag(it.copy(userId=remap.getValue(it.userId)))}
+            snapshot.links.forEach {dao.putEntryTag(it.copy(userId=remap.getValue(it.userId)))}
+            snapshot.holidays.forEach {dao.putHoliday(it.copy(userId=remap.getValue(it.userId)))}
+            dao.putState(AppStateEntity("currentUserId",remap.getValue(snapshot.currentUserId)))
+        }
+    }
 }

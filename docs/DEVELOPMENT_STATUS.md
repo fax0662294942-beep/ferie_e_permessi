@@ -34,9 +34,9 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 - [x] B1 — transplant Factory Android skeleton and CI, rename application/package, establish green baseline.
 - [x] B2 — native domain model + Room schema for users/configuration/entries/tags/special leave/time bank.
 - [x] B3 — port deterministic accrual/calendar/business-rule engine with unit tests.
-- [ ] B4 — Home/month summary + entry CRUD.
-- [ ] B5 — calendar, simulation, liquidation, special leave and time bank.
-- [ ] B6 — statistics, settings, tags and multi-user flows.
+- [x] B4 — Home/month summary + entry CRUD.
+- [x] B5 — calendar, simulation, liquidation, special leave and time bank.
+- [x] B6 — statistics, settings, tags and multi-user flows.
 - [ ] B7 — legacy PWA JSON import + native backup/restore regression coverage.
 - [ ] B8 — Firebase/Google authentication and Firestore sync compatibility.
 - [ ] B9 — candidate hardening, emulator regression suite and APK candidate.
@@ -73,3 +73,12 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Statistics: month/year/all/custom-date periods, accrual and consumed delta, compulsory/requested episode breakdown, paid leave and weekday distribution.
 - Added repository integration and statistics unit coverage; permanent dialog-first Back regression.
 - B4–B6 remain open until build/lint/unit/emulator pass.
+
+## B4–B6 closed
+- Action #6 (run 36754874208), commit 2af0561c26896c3cecf9503b45ce785373184265: build/lint/unit/APK and API 35 emulator both succeeded.
+
+## B7 implementation awaiting gate
+- Versioned native JSON codec and direct PWA users/anni/entries/tags/festivita import; preserves balances, IDs within profiles, seven entry kinds, simulation and compulsory flags.
+- Android SAF create/open documents, bounded file reads and complete validation before atomic Room writes. Import adds independent profiles with remapped IDs and never replaces existing local users.
+- Native transactional restore infrastructure and permanent unit/emulator round-trip, malformed-input, identity-isolation and preservation regressions.
+- No live user data or PWA files modified.

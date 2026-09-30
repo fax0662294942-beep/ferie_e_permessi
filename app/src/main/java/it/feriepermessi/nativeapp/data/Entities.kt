@@ -1,10 +1,12 @@
 package it.feriepermessi.nativeapp.data
 
+import kotlinx.serialization.Serializable
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+@Serializable
 @Entity(tableName = "users")
 data class UserEntity(
     @PrimaryKey val id: String,
@@ -27,11 +29,13 @@ data class UserEntity(
     val studyAnnualBudget: Double = 150.0
 )
 
+@Serializable
 @Entity(tableName = "year_config", primaryKeys = ["userId", "year"],
     foreignKeys = [ForeignKey(entity = UserEntity::class, parentColumns = ["id"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE)], indices = [Index("userId")])
 data class YearConfigEntity(val userId: String, val year: Int, val vacationAnnual: Double = 26.0, val leaveAnnual: Double = 100.0)
 
 // Composite identities preserve legacy IDs even when distinct users share an ID.
+@Serializable
 @Entity(tableName = "entries", primaryKeys = ["userId", "id"],
     foreignKeys = [ForeignKey(entity = UserEntity::class, parentColumns = ["id"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE)], indices = [Index("userId")])
 data class EntryEntity(
@@ -41,10 +45,12 @@ data class EntryEntity(
     val simulated: Boolean = false, val obligatory: Boolean = false
 )
 
+@Serializable
 @Entity(tableName = "tags", primaryKeys = ["userId", "id"],
     foreignKeys = [ForeignKey(entity = UserEntity::class, parentColumns = ["id"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE)], indices = [Index("userId")])
 data class TagEntity(val userId: String, val id: String, val name: String, val color: String)
 
+@Serializable
 @Entity(tableName = "entry_tags", primaryKeys = ["userId", "entryId", "tagId"],
     foreignKeys = [
         ForeignKey(entity = EntryEntity::class, parentColumns = ["userId", "id"], childColumns = ["userId", "entryId"], onDelete = ForeignKey.CASCADE),
@@ -52,11 +58,13 @@ data class TagEntity(val userId: String, val id: String, val name: String, val c
     ], indices = [Index(value = ["userId", "entryId"]), Index(value = ["userId", "tagId"])])
 data class EntryTagEntity(val userId: String, val entryId: String, val tagId: String)
 
+@Serializable
 @Entity(tableName = "holidays", primaryKeys = ["userId", "id"],
     foreignKeys = [ForeignKey(entity = UserEntity::class, parentColumns = ["id"], childColumns = ["userId"], onDelete = ForeignKey.CASCADE)], indices = [Index("userId")])
 data class HolidayEntity(val userId: String, val id: String, val name: String,
     val month: Int? = null, val day: Int? = null, val easterMonday: Boolean = false,
     val recurring: Boolean = true, val fromYear: Int? = null, val year: Int? = null)
 
+@Serializable
 @Entity(tableName = "app_state")
 data class AppStateEntity(@PrimaryKey val key: String, val value: String)
