@@ -43,3 +43,11 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 
 ## Human checkpoints
 Stop only for genuine product ambiguity, destructive real-data migration, credentials/secrets, subjective UI acceptance, unavoidable physical-device validation, or final production release.
+
+## Verification 2026-09-30
+- Latest upstream commit: fd4c97024e6ed6f0987281b1d60078db580bd64b.
+- Action #2 succeeded (build, lint, JVM tests); B1 emulator coverage is now added and awaiting the new gate.
+- B2 implementation: independent native Room database, users, yearly configuration, all seven legacy entry types, tags/links, holidays and app state. Negative leave balances and per-user legacy IDs preserved.
+- Room exportSchema enabled; generated schema must be checked in after the authoritative build. No destructive migration fallback.
+- PWA baseline inspected directly at main:index.html; no legacy files changed.
+- B1/B2 closure pending build + emulator gate and exported schema verification.
