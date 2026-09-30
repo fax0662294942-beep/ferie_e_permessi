@@ -23,4 +23,14 @@ class CloudPayloadTest {
         assertNotEquals(CloudPayload.fingerprint(null),CloudPayload.fingerprint(obj("{}")))
         assertNotEquals(CloudPayload.fingerprint(obj("""{"lastModified":1}""")),CloudPayload.fingerprint(obj("""{"lastModified":2}""")))
     }
+    @Test fun preservesOpaqueFirestoreExtensionTypes() {
+        val opaque=Any()
+        val old=mapOf<String,Any?>("timestampExtension" to opaque,"users" to listOf(mapOf("id" to "u","typedExtension" to opaque,"name" to "Old")))
+        val fresh=mapOf<String,Any?>("users" to listOf(mapOf("id" to "u","name" to "New")))
+        val merged=CloudPayload.mergeValues(old,fresh)
+        assertSame(opaque,merged["timestampExtension"])
+        val user=(merged["users"] as List<*>).first() as Map<*,*>
+        assertSame(opaque,user["typedExtension"])
+        assertEquals("New",user["name"])
+    }
 }

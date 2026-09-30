@@ -69,11 +69,15 @@ class CloudController(private val repository:NativeRepository,private val scope:
                 if(!current(identity.uid)) return@launchOperation
                 remoteBaseline=remote;mutable.value=mutable.value.copy(remote=remote)
                 dataListener?.remove()
-                dataListener=gateway.watchData(identity.uid) {document,error ->
+                dataListener=gateway.watchData(identity.uid) {eventDocument,error ->
                     scope.launch {mutex.withLock {
                         if(!current(identity.uid) || mutable.value.access!=PwaCloudContract.Access.Approved) return@withLock
                         if(error!=null) {mutable.value=mutable.value.copy(message="Cloud non disponibile: ${error.message}");return@withLock}
-                        if(document==null || document.fingerprint==remoteBaseline?.fingerprint) return@withLock
+                        if(eventDocument==null || eventDocument.fingerprint==remoteBaseline?.fingerprint) return@withLock
+                        try {
+                        // A queued listener event may predate our last transaction. Always re-read the latest revision.
+                        val document=gateway.fetch(identity.uid)
+                        if(document.fingerprint==remoteBaseline?.fingerprint || !current(identity.uid)) return@withLock
                         val unchanged=PwaCloudContract.encode(repository.snapshot())==localBaseline
                         if(mutable.value.linked && unchanged && document.snapshot!=null) {
                             repository.restoreCloud(document.snapshot,identity.uid);reload()
@@ -82,6 +86,8 @@ class CloudController(private val repository:NativeRepository,private val scope:
                             mutable.value=mutable.value.copy(linked=false,message="Il cloud è cambiato: confronta i dati prima di continuare.")
                         }
                         remoteBaseline=document;mutable.value=mutable.value.copy(remote=document)
+                        }catch(e:CancellationException){throw e}
+                        catch(e:Exception){if(current(identity.uid)) mutable.value=mutable.value.copy(linked=false,message="Aggiornamento cloud non riuscito: ${e.message}")}
                     }}
                 }
             }
@@ -95,7 +101,13 @@ class CloudController(private val repository:NativeRepository,private val scope:
         val identity=gateway.identity() ?: return
         // Remove old data listeners before another server refresh.
         listeners.forEach {it.remove()};dataListener?.remove();dataListener=null;listeners=gateway.watchApproval(identity.uid) {refreshApproval(identity)}
-        remoteBaseline=null;refreshApproval(identity)
+        remoteBaseline=null;localBaseline=null
+        mutable.value=mutable.value.copy(linked=false,remote=null)
+        refreshApproval(identity)
+    }
+    suspend fun mutate(block:suspend ()->Unit)=mutex.withLock {
+        require(mayEdit) {"Accesso non autorizzato: verifica lo stato dell’account"}
+        block()
     }
     suspend fun login(context:Context) {
         val option=GetGoogleIdOption.Builder().setServerClientId(context.getString(R.string.default_web_client_id))

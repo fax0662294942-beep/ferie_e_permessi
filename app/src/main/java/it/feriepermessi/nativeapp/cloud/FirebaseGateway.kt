@@ -73,8 +73,9 @@ class FirebaseGateway(val auth:FirebaseAuth=FirebaseAuth.getInstance(),val fires
             val merged=CloudPayload.merge(raw ?: JsonObject(emptyMap()),fresh)
             // Firestore's document limit is 1 MiB. Leave room for server timestamps/index overhead.
             require(merged.toString().toByteArray(Charsets.UTF_8).size<900_000) {"Dati troppo grandi per il documento cloud"}
-            val fields=toValue(merged) as Map<*,*>
-            val update=fields.entries.associate {it.key.toString() to it.value}.toMutableMap()
+            val fields=fresh.mapValues {toValue(it.value)}
+            // Retain native Timestamp, GeoPoint, Blob and DocumentReference values in unknown fields.
+            val update=CloudPayload.mergeValues(latest.data.orEmpty(),fields).toMutableMap()
             update["lastModified"]=FieldValue.serverTimestamp()
             ensureIdentity(uid);tx.set(data(uid),update,SetOptions.merge());null
         }.await()
@@ -128,6 +129,9 @@ class FirebaseGateway(val auth:FirebaseAuth=FirebaseAuth.getInstance(),val fires
             is List<*>->JsonArray(value.map(::element))
             is Boolean->JsonPrimitive(value)
             is Number->JsonPrimitive(value)
+            is Blob->JsonPrimitive(java.util.Base64.getEncoder().encodeToString(value.toBytes()))
+            is GeoPoint->buildJsonObject {put("latitude",value.latitude);put("longitude",value.longitude)}
+            is DocumentReference->JsonPrimitive(value.path)
             is Timestamp->buildJsonObject {put("seconds",value.seconds);put("nanoseconds",value.nanoseconds)}
             else->JsonPrimitive(value.toString())
         }

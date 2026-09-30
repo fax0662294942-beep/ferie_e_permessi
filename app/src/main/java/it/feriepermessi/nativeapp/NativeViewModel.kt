@@ -25,7 +25,7 @@ class NativeViewModel(application: Application): AndroidViewModel(application) {
         mutable.value = NativeState(users, repository.profile(id), repository.dao.tags(id), repository.dao.entryTags(id))
     }
     fun action(block: suspend () -> Unit) { viewModelScope.launch {
-        try { require(cloud.mayEdit) { "Accesso non autorizzato: verifica lo stato dell’account" }; block(); reload(); cloud.localChanged() } catch (e: Exception) { mutable.value = mutable.value.copy(error = e.message ?: "Operazione non riuscita") }
+        try { cloud.mutate {block();reload()}; cloud.localChanged() } catch (e: Exception) { mutable.value = mutable.value.copy(error = e.message ?: "Operazione non riuscita") }
     } }
     fun clearError() { mutable.value = mutable.value.copy(error=null) }
     fun selectUser(id: String) = action { repository.dao.putState(AppStateEntity("currentUserId",id)) }

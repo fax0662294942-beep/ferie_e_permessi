@@ -98,6 +98,10 @@ class FirebaseGatewayTest {
                 assertEquals(4.0,r.dao.entries("u").first {it.id=="e"}.quantity,0.0)
                 user.firestore.enableNetwork().await()
                 assertEquals(3.0,user.fetch(uid.uid).snapshot!!.entries.first {it.userId=="u" && it.id=="e"}.quantity,0.0)
+                controller.refresh()
+                withTimeout(30_000) {controller.state.first {it.remote!=null && !it.busy}}
+                assertFalse(controller.state.value.linked)
+                assertEquals(4.0,r.dao.entries("u").first {it.id=="e"}.quantity,0.0)
                 val after=r.snapshot()
                 user.signOut()
                 withTimeout(15_000) {controller.state.first {it.identity==null}}
