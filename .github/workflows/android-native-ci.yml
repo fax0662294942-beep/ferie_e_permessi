@@ -22,8 +22,10 @@ jobs:
       - name: Retain the development-only debug certificate
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: ferie-permessi-native-debug-certificate-v1
+          path: |
+            ~/.android/debug.keystore
+            ~/.config/.android/debug.keystore
+          key: ferie-permessi-native-debug-certificate-v2
       - name: Unit tests and lint
         run: gradle :app:testDebugUnitTest :app:lintDebug
       - name: Build debug APK

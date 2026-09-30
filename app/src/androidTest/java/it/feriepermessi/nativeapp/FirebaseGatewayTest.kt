@@ -31,6 +31,15 @@ class FirebaseGatewayTest {
         store.useEmulator("10.0.2.2",8080)
         return app to FirebaseGateway(auth,store)
     }
+    private fun assertEquivalent(expected:NativeSnapshot,actual:NativeSnapshot) {
+        assertEquals(expected.users.toSet(),actual.users.toSet())
+        assertEquals(expected.years.toSet(),actual.years.toSet())
+        assertEquals(expected.entries.toSet(),actual.entries.toSet())
+        assertEquals(expected.tags.toSet(),actual.tags.toSet())
+        assertEquals(expected.links.toSet(),actual.links.toSet())
+        assertEquals(expected.holidays.toSet(),actual.holidays.toSet())
+        assertEquals(expected.currentUserId,actual.currentUserId)
+    }
     @Test fun approvalIsolationConflictPreservationRevocationAndLogout()=runBlocking {
         val (adminApp,admin)=gateway();val (userApp,user)=gateway()
         val db=Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(),NativeDatabase::class.java).build()
@@ -46,7 +55,7 @@ class FirebaseGatewayTest {
             val fixture=InstrumentationRegistry.getInstrumentation().context.assets.open("pwa-backup.json").bufferedReader().use {BackupCodec.decode(it.readText())}
             val missing=user.fetch(uid.uid);assertNull(missing.snapshot)
             user.publish(uid.uid,missing,fixture)
-            assertEquals(fixture,user.fetch(uid.uid).snapshot)
+            assertEquivalent(fixture,requireNotNull(user.fetch(uid.uid).snapshot))
             val stale=user.fetch(uid.uid)
             // Simulate a PWA extension field and concurrent save.
             admin.firestore.collection(PwaCloudContract.DATA_COLLECTION).document(uid.uid).update(mapOf("extension" to "preserve")).await()

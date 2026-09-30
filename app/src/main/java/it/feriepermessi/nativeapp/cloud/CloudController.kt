@@ -7,6 +7,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.ListenerRegistration
 import it.feriepermessi.nativeapp.R
 import it.feriepermessi.nativeapp.data.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -46,6 +48,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         }
         authListener=listener;gateway.auth.addAuthStateListener(listener)
     }
+    private fun localFingerprint(snapshot:NativeSnapshot)=CloudPayload.fingerprint(Json.parseToJsonElement(PwaCloudContract.encode(snapshot)).jsonObject)
     private fun current(uid:String)=sessionUid==uid && gateway.identity()?.uid==uid
     private fun launchOperation(block:suspend ()->Unit) {scope.launch {
         mutex.withLock {
@@ -78,10 +81,10 @@ class CloudController(private val repository:NativeRepository,private val scope:
                         // A queued listener event may predate our last transaction. Always re-read the latest revision.
                         val document=gateway.fetch(identity.uid)
                         if(document.fingerprint==remoteBaseline?.fingerprint || !current(identity.uid)) return@withLock
-                        val unchanged=PwaCloudContract.encode(repository.snapshot())==localBaseline
+                        val unchanged=localFingerprint(repository.snapshot())==localBaseline
                         if(mutable.value.linked && unchanged && document.snapshot!=null) {
                             repository.restoreCloud(document.snapshot,identity.uid);reload()
-                            localBaseline=PwaCloudContract.encode(repository.snapshot())
+                            localBaseline=localFingerprint(repository.snapshot())
                         }else {
                             mutable.value=mutable.value.copy(linked=false,message="Il cloud è cambiato: confronta i dati prima di continuare.")
                         }
@@ -133,7 +136,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         val snapshot=requireNotNull(remote.snapshot) {"Nessun dato cloud da caricare"}
         if(!current(identity.uid)) return@launchOperation
         repository.restoreCloud(snapshot,identity.uid);reload()
-        remoteBaseline=remote;localBaseline=PwaCloudContract.encode(repository.snapshot())
+        remoteBaseline=remote;localBaseline=localFingerprint(repository.snapshot())
         mutable.value=mutable.value.copy(linked=true,remote=remote,message="Dati cloud caricati. Copia di sicurezza locale conservata.")
     }
     fun useLocal()=launchOperation {
@@ -143,7 +146,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
         val snapshot=repository.snapshot();gateway.publish(identity.uid,expected,snapshot)
         if(!current(identity.uid)) return@launchOperation
         repository.dao.putState(AppStateEntity("cloudBoundUid",identity.uid))
-        localBaseline=PwaCloudContract.encode(snapshot);remoteBaseline=gateway.fetch(identity.uid)
+        localBaseline=localFingerprint(snapshot);remoteBaseline=gateway.fetch(identity.uid)
         mutable.value=mutable.value.copy(linked=true,remote=remoteBaseline,message="Sincronizzazione attiva")
     }
     fun localChanged() {
@@ -168,7 +171,7 @@ class CloudController(private val repository:NativeRepository,private val scope:
             val snapshot=repository.snapshot()
             gateway.publish(identity.uid,requireNotNull(remoteBaseline),snapshot)
             if(!current(identity.uid)) return@withLock
-            localBaseline=PwaCloudContract.encode(snapshot);remoteBaseline=gateway.fetch(identity.uid)
+            localBaseline=localFingerprint(snapshot);remoteBaseline=gateway.fetch(identity.uid)
             mutable.value=mutable.value.copy(remote=remoteBaseline,message="Sincronizzato")
         }catch(e:CancellationException){throw e}
         catch(e:Exception){if(current(identity.uid)) mutable.value=mutable.value.copy(linked=false,message=e.message ?: "Sincronizzazione non riuscita: aggiorna il confronto")}
