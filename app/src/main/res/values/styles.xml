@@ -1,0 +1,1 @@
+<resources><style name="Theme.FeriePermessi" parent="android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">#1A1D27</item></style></resources>
