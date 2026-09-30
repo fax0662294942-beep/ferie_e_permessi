@@ -28,3 +28,13 @@ Official reference: https://firebase.google.com/docs/auth/android/google-signin
 - Preserve unknown existing cloud fields, and use explicit conflict detection before updating the shared PWA document.
 
 B8 is not complete until authentication and Firestore integration are implemented and gated. B9 candidate hardening follows that gate. The original PWA and production data remain untouched.
+
+## Configuration received 2026-09-30
+The uploaded Android configuration matches the correct package/project and includes a web OAuth client. It is now used by the Google Services Gradle plugin. Firebase mobile configuration identifies the project and is not a service-account private key.
+
+The uploaded file contains no Android OAuth client/certificate pairing. CI therefore publishes `signing-report.txt` alongside the debug APK. Register that build's SHA-1 (and SHA-256) in the existing Firebase Android app, download the updated configuration, and validate Google account selection on a physical device. The Actions cache retains the development debug certificate across successful builds; cache eviction causes certificate rotation and requires re-registration. This certificate is for development only and is not a production signing strategy.
+
+## Implemented test boundary
+FirebaseGatewayTest starts named apps pointed exclusively at Auth/Firestore emulators in project demo-feriepermessi. `firebase-test.json` and `tests/firestore.rules` are test fixtures, not production deployment configuration. The CI command is emulators:exec and never firebase deploy.
+
+Backend contract coverage includes first-admin bootstrap, pending/rejected access, promotion/demotion, account isolation, revision conflicts, extension preservation, listeners, logout preserving Room records, safe local archive before cloud load, and admin deletion. Live Google OAuth provider behavior and the existing project's actual security rules still require the candidate/device checkpoint.

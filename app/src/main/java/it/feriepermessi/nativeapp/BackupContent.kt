@@ -17,12 +17,17 @@ import java.time.LocalDate
     var preview by remember {mutableStateOf<NativeSnapshot?>(null)}
     var replaceConfirm by remember {mutableStateOf(false)}
     var status by remember {mutableStateOf<String?>(null)}
+    var exportSafety by remember {mutableStateOf(false)}
     var busy by remember {mutableStateOf(false)}
     val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {uri ->
         if(uri!=null && model!=null) scope.launch {
             busy=true
             try {
-                val text=withContext(Dispatchers.IO) {BackupCodec.encode(model.repository.snapshot())}
+                val text=withContext(Dispatchers.IO) {
+                    if(exportSafety) model.repository.dao.states().lastOrNull {it.key.startsWith("cloudSafety:")}?.value
+                        ?: throw IllegalStateException("Nessuna copia di sicurezza cloud disponibile")
+                    else BackupCodec.encode(model.repository.snapshot())
+                }
                 withContext(Dispatchers.IO) {requireNotNull(context.contentResolver.openOutputStream(uri,"wt")).use {it.write(text.toByteArray(Charsets.UTF_8))}}
                 status="Backup esportato"
             }catch(e:Exception){status="Esportazione non riuscita: ${e.message}"}finally{busy=false}
@@ -52,8 +57,9 @@ import java.time.LocalDate
         }
     }
     Text("Backup e importazione",style=MaterialTheme.typography.titleLarge)
-    Button({export.launch("ferie_permessi_native_${LocalDate.now()}.json")},enabled=!busy && model!=null) {Text("Esporta backup JSON")}
+    Button({exportSafety=false;export.launch("ferie_permessi_native_${LocalDate.now()}.json")},enabled=!busy && model!=null) {Text("Esporta backup JSON")}
     Button({import.launch(arrayOf("application/json","text/plain","application/octet-stream"))},enabled=!busy && model!=null) {Text("Importa backup PWA o nativo")}
+    TextButton({exportSafety=true;export.launch("ferie_permessi_prima_del_cloud_${LocalDate.now()}.json")},enabled=!busy && model!=null) {Text("Esporta copia prima del caricamento cloud")}
     Text("L’importazione aggiunge copie dei profili e conserva tutti i dati attuali.")
     status?.let {Text(it)}
     preview?.takeUnless {replaceConfirm}?.let {snapshot -> AlertDialog(onDismissRequest={preview=null},title={Text("Importare il backup?")},

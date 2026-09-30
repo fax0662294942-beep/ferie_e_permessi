@@ -1,5 +1,6 @@
 package it.feriepermessi.nativeapp
 
+import it.feriepermessi.nativeapp.cloud.*
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
@@ -29,20 +30,28 @@ class MainActivity: ComponentActivity() {
         val model = ViewModelProvider(this)[NativeViewModel::class.java]
         setContent {
             val state by model.state.collectAsState()
+            val cloud by model.cloud.state.collectAsState()
             MaterialTheme(colorScheme = darkColorScheme(primary=Color(0xFF4ADE80),secondary=Color(0xFF60A5FA),background=Color(0xFF0F1117),surface=Color(0xFF1A1D27))) {
-                FeriePermessiApp(onHint={Toast.makeText(this,"Premi di nuovo Indietro per uscire",Toast.LENGTH_SHORT).show()},onExit=::finish,back=back,state=state,model=model)
+                FeriePermessiApp(onHint={Toast.makeText(this,"Premi di nuovo Indietro per uscire",Toast.LENGTH_SHORT).show()},onExit=::finish,back=back,state=state,model=model,cloudState=cloud)
             }
         }
     }
 }
-enum class Screen { Home, Calendar, Stats, Settings }
+enum class Screen { Home, Calendar, Stats, Settings, Cloud }
 private val entryLabels = linkedMapOf("ferie" to "Ferie","permesso" to "Permesso","permesso_pagato" to "Liquidazione permessi",
     "banca_accumulo" to "Banca ore: accumulo","banca_fruizione" to "Banca ore: fruizione","permesso_104" to "Permesso L.104","permesso_studio" to "Permesso studio")
 private fun format(value: Double) = "%.2f".format(java.util.Locale.ITALY,value)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun FeriePermessiApp(onHint:()->Unit={},onExit:()->Unit={},back:BackPressController=BackPressController(),
-    state: NativeState = NativeState(), model: NativeViewModel? = null) {
+    state: NativeState = NativeState(), model: NativeViewModel? = null, cloudState:CloudState=CloudState()) {
+    if(cloudState.identity!=null && cloudState.access!=PwaCloudContract.Access.Approved) {
+        BackHandler {when(back.onHomeBack()) {BackAction.ShowHint->onHint();BackAction.Exit->onExit()}}
+        Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            CloudContent(cloudState,model)
+        }
+        return
+    }
     var screenName by rememberSaveable { mutableStateOf(Screen.Home.name) }
     var monthText by rememberSaveable { mutableStateOf(YearMonth.now().toString()) }
     var monthPicker by remember { mutableStateOf(false) }
@@ -81,6 +90,8 @@ private fun format(value: Double) = "%.2f".format(java.util.Locale.ITALY,value)
                     Text("Riepilogo",style=MaterialTheme.typography.headlineMedium)
                     Row { TextButton({navigate(Screen.Calendar)}) {Text("Calendario")}; TextButton({navigate(Screen.Stats)}) {Text("Statistiche")} }
                     TextButton({navigate(Screen.Settings)}) {Text("Impostazioni")}
+                    TextButton({navigate(Screen.Cloud)}) {Text("Account e cloud")}
+                    if(cloudState.identity!=null) Text(if(cloudState.linked) "Cloud sincronizzato" else "Cloud da collegare")
                     if(profile != null) {
                         val balance=engine.monthBalance(profile,month.year,month.monthValue,simulation)
                         val totals=engine.annualTotals(profile,month.year,simulation)
@@ -117,6 +128,7 @@ private fun format(value: Double) = "%.2f".format(java.util.Locale.ITALY,value)
                         }
                     } else Text("Caricamento dati…")
                 }
+                Screen.Cloud -> CloudContent(cloudState,model)
                 Screen.Calendar -> { Text("Calendario",style=MaterialTheme.typography.headlineMedium); if(profile!=null) CalendarContent(profile,month,simulation) }
                 Screen.Stats -> { Text("Statistiche",style=MaterialTheme.typography.headlineMedium); if(profile!=null) StatsContent(profile,month,engine) }
                 Screen.Settings -> { Text("Impostazioni",style=MaterialTheme.typography.headlineMedium); if(profile!=null) SettingsContent(state,month,model) }

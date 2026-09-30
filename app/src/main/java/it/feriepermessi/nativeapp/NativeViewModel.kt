@@ -1,6 +1,7 @@
 package it.feriepermessi.nativeapp
 
 import android.app.Application
+import it.feriepermessi.nativeapp.cloud.CloudController
 import androidx.room.withTransaction
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,14 +17,15 @@ class NativeViewModel(application: Application): AndroidViewModel(application) {
     val repository = NativeRepository(NativeDatabase.open(application))
     private val mutable = MutableStateFlow(NativeState())
     val state = mutable.asStateFlow()
-    init { action { repository.initialize() } }
+    val cloud = CloudController(repository,viewModelScope,reload={reload()})
+    init { viewModelScope.launch { repository.initialize();reload();cloud.start() } }
     private suspend fun reload() {
         val users = repository.dao.users()
         val id = repository.dao.state("currentUserId").takeIf { candidate -> users.any { it.id == candidate } } ?: users.first().id
         mutable.value = NativeState(users, repository.profile(id), repository.dao.tags(id), repository.dao.entryTags(id))
     }
     fun action(block: suspend () -> Unit) { viewModelScope.launch {
-        try { block(); reload() } catch (e: Exception) { mutable.value = mutable.value.copy(error = e.message ?: "Operazione non riuscita") }
+        try { require(cloud.mayEdit) { "Accesso non autorizzato: verifica lo stato dell’account" }; block(); reload(); cloud.localChanged() } catch (e: Exception) { mutable.value = mutable.value.copy(error = e.message ?: "Operazione non riuscita") }
     } }
     fun clearError() { mutable.value = mutable.value.copy(error=null) }
     fun selectUser(id: String) = action { repository.dao.putState(AppStateEntity("currentUserId",id)) }
@@ -39,5 +41,5 @@ class NativeViewModel(application: Application): AndroidViewModel(application) {
     fun deleteTag(tag: TagEntity) = action { repository.dao.deleteTag(tag.userId,tag.id) }
     fun putHoliday(holiday: HolidayEntity) = action { repository.dao.putHoliday(holiday) }
     fun deleteHoliday(holiday: HolidayEntity) = action { repository.dao.deleteHoliday(holiday.userId,holiday.id) }
-    override fun onCleared() { repository.database.close() }
+    override fun onCleared() { cloud.close(); repository.database.close() }
 }

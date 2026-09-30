@@ -9,6 +9,7 @@ interface NativeDao {
     @Query("SELECT * FROM users ORDER BY rowid") fun observeUsers(): Flow<List<UserEntity>>
     @Query("DELETE FROM users WHERE id = :id") suspend fun deleteUser(id: String)
     @Query("DELETE FROM users") suspend fun clearUsers()
+    @Query("SELECT * FROM app_state") suspend fun states(): List<AppStateEntity>
     @Query("DELETE FROM app_state") suspend fun clearState()
     @Query("SELECT * FROM users ORDER BY rowid") suspend fun users(): List<UserEntity>
     @Upsert suspend fun putUser(user: UserEntity)

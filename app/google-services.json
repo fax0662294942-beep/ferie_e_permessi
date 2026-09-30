@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "172431561795",
+    "project_id": "viaggi-camper",
+    "storage_bucket": "viaggi-camper.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:172431561795:android:1e23bfc321ab354f2d70f6",
+        "android_client_info": {
+          "package_name": "it.feriepermessi.nativeapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "172431561795-n3c8s6lmt9lce04e4jct3geatceo3kbi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsG8OdGySG-15FvwtX8rcjS2QAaLgi3c8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "172431561795-n3c8s6lmt9lce04e4jct3geatceo3kbi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

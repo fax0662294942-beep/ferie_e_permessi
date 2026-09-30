@@ -93,3 +93,11 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - B7 native/PWA JSON round trips, non-destructive profile import, atomic replacement, malformed-file rejection and identity isolation passed. SAF restore requires a separate explicit replacement confirmation.
 - B8 payload compatibility and approval policy unit tests passed in the same gate. Actual Firebase Auth/Firestore integration remains unimplemented pending Android registration/OAuth configuration and stable signing setup.
 - Stopping at the authorized credentials/configuration checkpoint described in AGENTS.md and docs/FIREBASE_SETUP.md. No final production merge/release; main/PWA unchanged.
+
+## B8 implementation awaiting gate — Android configuration received
+- User-provided app/google-services.json verified for project viaggi-camper and package it.feriepermessi.nativeapp; web OAuth client present, no Android certificate fingerprint in the supplied file.
+- Credential Manager Google sign-in, Firebase Auth session/logout, approval screens, first-admin claim, registry status/role management and explicit-confirmation account deletion.
+- PWA-compatible Firestore documents; approved-account listeners, manual reconciliation, recoverable local snapshots before cloud download, debounced local uploads, server transactions checking approval and exact cloud revisions, extension-field preservation.
+- Firebase Auth/Firestore emulator integration gate uses demo-feriepermessi and test-only rules; no production rules deployed, no production account data accessed by development tests.
+- CI retains the development debug certificate in Actions cache and exports signing-report.txt with the APK; production signing keys remain out of scope. If that cache is lost, the fingerprint must be registered again.
+- B8 remains open pending build/lint/JVM/emulator verification and the real Google sign-in checkpoint.

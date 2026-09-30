@@ -68,4 +68,13 @@ class NativeRepository(val database: NativeDatabase) {
             dao.putState(AppStateEntity("currentUserId",remap.getValue(snapshot.currentUserId)))
         }
     }
+    suspend fun restoreCloud(snapshot: NativeSnapshot, accountUid: String) = database.withTransaction {
+        require(accountUid.isNotBlank())
+        val previous=BackupCodec.encode(this.snapshot())
+        val archived=dao.states().filter {it.key.startsWith("cloudSafety:")}
+        restore(snapshot,replace=true)
+        archived.forEach {dao.putState(it)}
+        dao.putState(AppStateEntity("cloudSafety:${System.currentTimeMillis()}:${UUID.randomUUID()}",previous))
+        dao.putState(AppStateEntity("cloudBoundUid",accountUid))
+    }
 }

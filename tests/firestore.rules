@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function config() { return /databases/$(database)/documents/feriePermessi_config/admins; }
+    function registry(uid) { return /databases/$(database)/documents/feriePermessi_registry/$(uid); }
+    function admin() { return signed() && exists(config()) && request.auth.uid in get(config()).data.uids; }
+    function adminAfter() { return signed() && request.auth.uid in getAfter(config()).data.uids; }
+    function approved() { return admin() || (signed() && exists(registry(request.auth.uid)) && get(registry(request.auth.uid)).data.status == 'approved'); }
+    match /feriePermessi_config/admins {
+      allow read: if signed();
+      allow create, update: if admin() || (signed() && (!exists(config()) || get(config()).data.uids.size() == 0) && request.resource.data.uids == [request.auth.uid]);
+    }
+    match /feriePermessi_registry/{uid} {
+      allow get: if signed() && (request.auth.uid == uid || admin());
+      allow list: if admin();
+      allow create: if admin() || (signed() && request.auth.uid == uid && request.resource.data.status == 'pending' && request.resource.data.role == 'user');
+      allow update: if admin() || (signed() && request.auth.uid == uid && adminAfter());
+      allow delete: if admin() && request.auth.uid != uid;
+    }
+    match /feriePermessi_data/{uid} {
+      allow read, write: if signed() && ((request.auth.uid == uid && approved()) || admin());
+    }
+  }
+}

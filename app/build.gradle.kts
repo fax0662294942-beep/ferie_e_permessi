@@ -1,4 +1,5 @@
 plugins {
+    id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.android.application")
@@ -22,6 +23,13 @@ android {
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.room:room-runtime:2.6.1")
