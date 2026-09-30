@@ -37,7 +37,7 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 - [x] B4 — Home/month summary + entry CRUD.
 - [x] B5 — calendar, simulation, liquidation, special leave and time bank.
 - [x] B6 — statistics, settings, tags and multi-user flows.
-- [ ] B7 — legacy PWA JSON import + native backup/restore regression coverage.
+- [x] B7 — legacy PWA JSON import + native backup/restore regression coverage.
 - [ ] B8 — Firebase/Google authentication and Firestore sync compatibility.
 - [ ] B9 — candidate hardening, emulator regression suite and APK candidate.
 
@@ -87,3 +87,9 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Inspected the original PWA Firebase collection names, approval registry, admin authority and sync format. Added a side-effect-free PWA payload adapter and fail-closed access tests.
 - Live Android authentication is blocked by missing Android Firebase registration/OAuth configuration and a persistent candidate signing certificate. See docs/FIREBASE_SETUP.md for the concrete setup handoff.
 - B8 remains unchecked; no real cloud writes, production release or main-branch changes.
+
+## B7 closed / B8 configuration checkpoint
+- Action #9 (run 36774213211), commit 862feac773afa922b8335469ce86d7bdc8f6493d: build, lint, JVM tests, debug APK and API 35 emulator all succeeded.
+- B7 native/PWA JSON round trips, non-destructive profile import, atomic replacement, malformed-file rejection and identity isolation passed. SAF restore requires a separate explicit replacement confirmation.
+- B8 payload compatibility and approval policy unit tests passed in the same gate. Actual Firebase Auth/Firestore integration remains unimplemented pending Android registration/OAuth configuration and stable signing setup.
+- Stopping at the authorized credentials/configuration checkpoint described in AGENTS.md and docs/FIREBASE_SETUP.md. No final production merge/release; main/PWA unchanged.
