@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface NativeDao {
     @Query("SELECT * FROM users ORDER BY rowid") fun observeUsers(): Flow<List<UserEntity>>
+    @Query("DELETE FROM users WHERE id = :id") suspend fun deleteUser(id: String)
+    @Query("DELETE FROM users") suspend fun clearUsers()
+    @Query("DELETE FROM app_state") suspend fun clearState()
     @Query("SELECT * FROM users ORDER BY rowid") suspend fun users(): List<UserEntity>
     @Upsert suspend fun putUser(user: UserEntity)
     @Query("SELECT * FROM year_config WHERE userId = :userId") suspend fun years(userId: String): List<YearConfigEntity>
@@ -17,6 +20,9 @@ interface NativeDao {
     @Query("DELETE FROM entries WHERE userId = :userId AND id = :id") suspend fun deleteEntry(userId: String, id: String)
     @Query("SELECT * FROM tags WHERE userId = :userId") suspend fun tags(userId: String): List<TagEntity>
     @Upsert suspend fun putTag(tag: TagEntity)
+    @Query("DELETE FROM tags WHERE userId = :userId AND id = :id") suspend fun deleteTag(userId: String, id: String)
+    @Query("DELETE FROM entry_tags WHERE userId = :userId AND entryId = :entryId") suspend fun clearEntryTags(userId: String, entryId: String)
+    @Query("DELETE FROM holidays WHERE userId = :userId AND id = :id") suspend fun deleteHoliday(userId: String, id: String)
     @Upsert suspend fun putEntryTag(link: EntryTagEntity)
     @Query("SELECT * FROM entry_tags WHERE userId = :userId") suspend fun entryTags(userId: String): List<EntryTagEntity>
     @Query("SELECT * FROM holidays WHERE userId = :userId") suspend fun holidays(userId: String): List<HolidayEntity>

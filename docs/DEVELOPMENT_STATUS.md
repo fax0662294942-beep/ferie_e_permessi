@@ -33,7 +33,7 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 - [x] B0 — inspect PWA and Factory; establish native branch and migration contract.
 - [x] B1 — transplant Factory Android skeleton and CI, rename application/package, establish green baseline.
 - [x] B2 — native domain model + Room schema for users/configuration/entries/tags/special leave/time bank.
-- [ ] B3 — port deterministic accrual/calendar/business-rule engine with unit tests.
+- [x] B3 — port deterministic accrual/calendar/business-rule engine with unit tests.
 - [ ] B4 — Home/month summary + entry CRUD.
 - [ ] B5 — calendar, simulation, liquidation, special leave and time bank.
 - [ ] B6 — statistics, settings, tags and multi-user flows.
@@ -61,3 +61,15 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Injected-date deterministic engine ports PWA monthly allocation, 15-day gate, 24/48-month CCNL thresholds, FIFO, carry-forward (leave debt retained), liquidation, initial-date filtering, simulation, special leave, time bank, workdays and holidays.
 - Differential expected values generated read-only by tools/pwa-oracle.cjs against main:index.html.
 - Eight business-rule unit tests added, including the original PWA oracle fixture.
+
+## B3 closed
+- Action #5 (run 36754235034), commit 258415792c55f77eb389b53fd603c9d1344b54b4: unit/lint/APK and emulator green.
+
+## B4–B6 implementation awaiting gate
+- Native Room-backed Home and monthly ledger, year FIFO summary, validated entry create/update/delete with confirmation.
+- Month selector, official/simulation views and explicit confirmation of individual or monthly simulations.
+- Calendar date/range visibility; liquidation, Law 104, study and time-bank entries/counters.
+- User selection/add/delete (last user protected), per-year configuration, CCNL seniority settings, initial balances, weekend/holiday rules, custom holidays, editable tags and entry tag filter.
+- Statistics: month/year/all/custom-date periods, accrual and consumed delta, compulsory/requested episode breakdown, paid leave and weekday distribution.
+- Added repository integration and statistics unit coverage; permanent dialog-first Back regression.
+- B4–B6 remain open until build/lint/unit/emulator pass.
