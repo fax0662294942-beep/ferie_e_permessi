@@ -18,13 +18,17 @@ class NavigationTest {
         var time = 1000L
         compose.setContent { FeriePermessiApp(onHint = { hints++ }, onExit = { exits++ }, back = BackPressController({ time })) }
         compose.onNodeWithText("Calendario").performClick()
+        compose.waitForIdle()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
         compose.onNodeWithText("Riepilogo").assertExists()
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
         assertEquals(1, hints)
         assertEquals(0, exits)
         time += 1999
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
         assertEquals(1, exits)
     }
 }
