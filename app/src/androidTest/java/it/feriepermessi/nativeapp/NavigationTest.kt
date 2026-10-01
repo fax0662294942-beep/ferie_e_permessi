@@ -18,6 +18,8 @@ class NavigationTest {
         compose.setContent { FeriePermessiApp(onExit={exits++},state=NativeState(profile=profile)) }
         compose.onNodeWithText("+ Ferie").performScrollTo().performClick()
         compose.onNodeWithText("Salva").assertExists()
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.waitForIdle()
         compose.onNodeWithText("Salva").assertDoesNotExist()

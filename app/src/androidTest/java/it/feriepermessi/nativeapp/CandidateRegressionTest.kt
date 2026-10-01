@@ -22,6 +22,9 @@ import java.util.UUID
 class CandidateRegressionTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private fun pressBack() {
+        // This assertion targets dialogs/navigation; an open IME consumes Back first.
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.waitForIdle()
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
             .sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.waitForIdle()
@@ -88,4 +91,3 @@ class CandidateRegressionTest {
         } finally { db.close();context.deleteDatabase(name) }
     }
 }
-
