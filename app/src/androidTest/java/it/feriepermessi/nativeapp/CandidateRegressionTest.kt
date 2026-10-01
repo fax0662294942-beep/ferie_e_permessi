@@ -77,7 +77,7 @@ class CandidateRegressionTest {
             val repository = NativeRepository(db)
             repository.initialize()
             val id = repository.dao.users().first().id
-            repository.saveEntry(EntryEntity(id,"saved","permesso",quantity=2.5,year=2026,month=10))
+            repository.saveEntry(EntryEntity(id,"saved","permesso",dateFrom="2026-10-01",dateTo="2026-10-01",quantity=2.5,year=2026,month=10))
             val backup = repository.snapshot()
             db.close()
             db = open()
@@ -88,3 +88,4 @@ class CandidateRegressionTest {
         } finally { db.close();context.deleteDatabase(name) }
     }
 }
+
