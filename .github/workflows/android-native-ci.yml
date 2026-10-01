@@ -26,18 +26,26 @@ jobs:
             ~/.android/debug.keystore
             ~/.config/.android/debug.keystore
           key: ferie-permessi-native-debug-certificate-v2
+      - name: Validate Firebase Android configuration
+        run: python3 tools/verify-firebase-config.py
       - name: Unit tests and lint
         run: gradle :app:testDebugUnitTest :app:lintDebug
       - name: Build debug APK
         run: |
           gradle :app:assembleDebug
           gradle :app:signingReport | tee app/build/outputs/apk/debug/signing-report.txt
+          APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APK_SIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/apk-certificate.txt
+          python3 tools/verify-firebase-config.py --certificate-report app/build/outputs/apk/debug/apk-certificate.txt
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/apk-sha256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: FeriePermessiNative-debug
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/signing-report.txt
+            app/build/outputs/apk/debug/apk-certificate.txt
+            app/build/outputs/apk/debug/apk-sha256.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
@@ -45,6 +53,10 @@ jobs:
           path: app/schemas
           if-no-files-found: error
   emulator:
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,14 +77,14 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           arch: x86_64
           disable-animations: true
           script: firebase emulators:exec --only auth,firestore --project demo-feriepermessi --config firebase-test.json "gradle :app:connectedDebugAndroidTest"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: instrumentation-results
+          name: instrumentation-results-api-${{ matrix.api }}
           path: |
             app/build/reports/androidTests
             app/build/outputs/androidTest-results

@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "172431561795-cfrgl2ofj8csic0afs3cukgtb2vbf56m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "it.feriepermessi.nativeapp",
+            "certificate_hash": "b04ea95e0a10c9515ed0830bdad52f352dcfeefc"
+          }
+        },
+        {
           "client_id": "172431561795-n3c8s6lmt9lce04e4jct3geatceo3kbi.apps.googleusercontent.com",
           "client_type": 3
         }

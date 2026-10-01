@@ -38,3 +38,8 @@ The uploaded file contains no Android OAuth client/certificate pairing. CI there
 FirebaseGatewayTest starts named apps pointed exclusively at Auth/Firestore emulators in project demo-feriepermessi. `firebase-test.json` and `tests/firestore.rules` are test fixtures, not production deployment configuration. The CI command is emulators:exec and never firebase deploy.
 
 Backend contract coverage includes first-admin bootstrap, pending/rejected access, promotion/demotion, account isolation, revision conflicts, extension preservation, listeners, logout preserving Room records, safe local archive before cloud load, and admin deletion. Live Google OAuth provider behavior and the existing project's actual security rules still require the candidate/device checkpoint.
+
+## Updated Android OAuth registration — 2026-10-01
+Updated configuration includes the Android client for it.feriepermessi.nativeapp and SHA-1 B0:4E:A9:5E:0A:10:C9:51:5E:D0:83:0B:DA:D5:2F:35:2D:CF:EE:FC, matching CI #16. CI verifies the certificate embedded in the resulting APK against this registration. The prior missing-fingerprint blocker is resolved.
+
+The next human checkpoint is to install the gated 0.2.0-rc1 APK and exercise live Google account selection and existing-project approval/rules on the phone. On first login, review the local/cloud comparison before selecting a data direction; do not choose local upload over an existing cloud ledger solely as an authentication test. Existing production rules remain unchanged.

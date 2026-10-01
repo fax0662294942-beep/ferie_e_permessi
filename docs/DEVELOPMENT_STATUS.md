@@ -101,3 +101,11 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Firebase Auth/Firestore emulator integration gate uses demo-feriepermessi and test-only rules; no production rules deployed, no production account data accessed by development tests.
 - CI retains the development debug certificate in Actions cache and exports signing-report.txt with the APK; production signing keys remain out of scope. If that cache is lost, the fingerprint must be registered again.
 - B8 remains open pending build/lint/JVM/emulator verification and the real Google sign-in checkpoint.
+
+## Updated Firebase configuration / B9 preparation — 2026-10-01
+- User supplied the updated Android OAuth registration. Project/package/web client verified; SHA-1 B0:4E:A9:5E:0A:10:C9:51:5E:D0:83:0B:DA:D5:2F:35:2D:CF:EE:FC matches the actual Action #16 signing report.
+- Action #16 (36783561566), commit f76fb1ea1544cf1cfb6ec4c8df67f3004ed24932: build/lint/JVM/APK and API 35 Firebase/Room/Compose instrumentation all passed. B8 implementation has passed its automated gate.
+- Updated google-services.json integrated. CI now verifies the actual APK signer against registered Android OAuth fingerprints and exports certificate/digest evidence. A rotated unregistered certificate fails the gate.
+- Candidate 0.2.0-rc1 (versionCode 2): extended emulator matrix to API 26 and 35, all-screen Back, invalid editor/month dialog dismissal, rejected-account/logout-modal isolation and disk database reopen/backup preservation regressions.
+- Updated configuration and B9 hardening still await the new authoritative gate. B8/B9 stay unchecked until that evidence and the required real Google sign-in/device checkpoint.
+- No production data, rules, main/PWA, production signing keys or final release touched.
