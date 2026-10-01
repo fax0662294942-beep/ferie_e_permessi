@@ -37,6 +37,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     implementation(platform("androidx.compose:compose-bom:2025.02.00"))
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.02.00"))
