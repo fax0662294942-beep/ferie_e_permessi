@@ -38,8 +38,8 @@ Ferie & Permessi Native — native Android migration of the existing PWA in this
 - [x] B5 — calendar, simulation, liquidation, special leave and time bank.
 - [x] B6 — statistics, settings, tags and multi-user flows.
 - [x] B7 — legacy PWA JSON import + native backup/restore regression coverage.
-- [ ] B8 — Firebase/Google authentication and Firestore sync compatibility.
-- [ ] B9 — candidate hardening, emulator regression suite and APK candidate.
+- [ ] B8 — Firebase/Google authentication and Firestore sync compatibility (automated gate green; live Google device checkpoint pending).
+- [ ] B9 — candidate hardening, emulator regression suite and APK candidate (automated gate green; physical/UI acceptance pending).
 
 ## Human checkpoints
 Stop only for genuine product ambiguity, destructive real-data migration, credentials/secrets, subjective UI acceptance, unavoidable physical-device validation, or final production release.
@@ -109,3 +109,14 @@ Stop only for genuine product ambiguity, destructive real-data migration, creden
 - Candidate 0.2.0-rc1 (versionCode 2): extended emulator matrix to API 26 and 35, all-screen Back, invalid editor/month dialog dismissal, rejected-account/logout-modal isolation and disk database reopen/backup preservation regressions.
 - Updated configuration and B9 hardening still await the new authoritative gate. B8/B9 stay unchecked until that evidence and the required real Google sign-in/device checkpoint.
 - No production data, rules, main/PWA, production signing keys or final release touched.
+
+## B8/B9 automated gates green / physical candidate checkpoint — 2026-10-01
+- Action #20, run 36804400687, source commit 0997347dcc81996b86a86d69c7f44bc39bce8cee: all three jobs succeeded.
+- Build/lint/JVM/APK and actual APK signing-certificate registration gate passed.
+- API 26: all 10 instrumentation tests passed. API 35: all 10 instrumentation tests passed. Firebase emulators, Room/backup/persistence and Compose regressions are included.
+- New modal tests initially exposed a test precondition: an open keyboard consumes Back before dialog dismissal. Tests now hide the IME explicitly before checking modal/navigation behavior; Espresso core is declared. No regression was removed or skipped.
+- APK: 0.2.0-rc1, versionCode 2, artifact FeriePermessiNative-debug (11136817681), including signing-report.txt, apk-certificate.txt and apk-sha256.txt.
+- Automated implementation/hardening for B8/B9 is complete. Roadmap checkboxes deliberately remain open until real Google provider/existing-project rules and physical/UI acceptance are verified; emulator-only success is not a claim of real OAuth success.
+- Stop at the existing AGENTS.md physical-device/subjective-UI checkpoint. See docs/CANDIDATE_CHECKPOINT.md for the concrete handoff.
+- Main/PWA files remain unchanged; no production rules/data/signing secrets or final production merge/release changed.
+- This status-only checkpoint commit does not change the verified candidate source/APK.
