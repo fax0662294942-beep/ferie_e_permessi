@@ -153,6 +153,29 @@ private fun format(value: Double) = "%.2f".format(java.util.Locale.ITALY,value)
         Text("Saldo fine mese ${format(end)}",style=MaterialTheme.typography.titleMedium)
     }}
 }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun DateField(label:String,value:String,onValue:(String)->Unit) {
+    var open by remember { mutableStateOf(false) }
+    val parsed=runCatching { LocalDate.parse(value) }.getOrNull()
+    OutlinedButton(onClick={open=true},modifier=Modifier.fillMaxWidth()) {
+        Text("$label: " + (parsed?.let { "%02d/%02d/%04d".format(it.dayOfMonth,it.monthValue,it.year) } ?: value) + "  📅")
+    }
+    if(open) {
+        val initial=parsed?.atStartOfDay(java.time.ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+        val picker=rememberDatePickerState(initialSelectedDateMillis=initial)
+        DatePickerDialog(
+            onDismissRequest={open=false},
+            confirmButton={TextButton({
+                picker.selectedDateMillis?.let { millis ->
+                    onValue(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString())
+                }
+                open=false
+            }) {Text("OK")}},
+            dismissButton={TextButton({open=false}) {Text("Annulla")}}
+        ) { DatePicker(state=picker) }
+    }
+}
+
 @Composable private fun EntryEditor(entry:EntryEntity,p:Profile,tags:List<TagEntity>,initialTags:List<String>,onDismiss:()->Unit,onSave:(EntryEntity,List<String>)->Unit) {
     var from by rememberSaveable(entry.id) {mutableStateOf(entry.dateFrom.orEmpty())}
     var to by rememberSaveable(entry.id) {mutableStateOf(entry.dateTo.orEmpty())}
@@ -161,23 +184,64 @@ private fun format(value: Double) = "%.2f".format(java.util.Locale.ITALY,value)
     var obligatory by rememberSaveable(entry.id) {mutableStateOf(entry.obligatory)}
     var selected by remember(entry.id) {mutableStateOf(initialTags)}
     var error by remember {mutableStateOf<String?>(null)}
-    AlertDialog(onDismissRequest=onDismiss,title={Text(entryLabels[entry.type].orEmpty())},text={
-        Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(from,{from=it},label={Text("Data (AAAA-MM-GG)")})
-            if(entry.type=="ferie") {OutlinedTextField(to,{to=it},label={Text("Data fine")}); TextButton({runCatching {quantity=WorkCalendar.workdays(p,LocalDate.parse(from),LocalDate.parse(to.ifBlank{from})).toString()}.onFailure {error="Date non valide"}}) {Text("Calcola giorni lavorativi")} }
-            OutlinedTextField(quantity,{quantity=it},label={Text(if(entry.type=="ferie") "Giorni" else "Ore")})
-            OutlinedTextField(note,{note=it},label={Text("Note")})
-            Row {Checkbox(obligatory,{obligatory=it}); Text("Obbligata")}
-            tags.forEach {tag -> Row {Checkbox(tag.id in selected,{checked -> selected=if(checked) selected+tag.id else selected-tag.id});Text(tag.name)}}
-            error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
-        }
-    },confirmButton={TextButton({
-        try {
-            val d=LocalDate.parse(from); val end=if(entry.type=="ferie") LocalDate.parse(to.ifBlank{from}) else d
-            val qty=quantity.replace(',','.').toDouble(); require(qty.isFinite() && qty>0 && end>=d)
-            onSave(entry.copy(dateFrom=d.toString(),dateTo=end.toString(),year=d.year,month=d.monthValue,quantity=qty,note=note.trim(),obligatory=obligatory),selected)
-        } catch(_:Exception) {error="Inserisci date valide e una quantità positiva"}
-    }) {Text("Salva")}},dismissButton={TextButton(onDismiss) {Text("Annulla")}})
+    AlertDialog(
+        onDismissRequest=onDismiss,
+        title={Text(entryLabels[entry.type].orEmpty())},
+        text={
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement=Arrangement.spacedBy(8.dp)
+            ) {
+                DateField(if(entry.type=="ferie") "Data inizio" else "Data",from) {from=it;if(entry.type!="ferie") to=it}
+                if(entry.type=="ferie") {
+                    DateField("Data fine",to) {to=it}
+                    TextButton({
+                        runCatching {quantity=WorkCalendar.workdays(p,LocalDate.parse(from),LocalDate.parse(to.ifBlank{from})).toString()}
+                            .onFailure {error="Date non valide"}
+                    }) {Text("Calcola giorni lavorativi")}
+                }
+                OutlinedTextField(
+                    quantity,{quantity=it},
+                    label={Text(if(entry.type=="ferie") "Giorni" else "Ore")},
+                    singleLine=true,
+                    modifier=Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(note,{note=it},label={Text("Note")},modifier=Modifier.fillMaxWidth(),maxLines=2)
+                FilterChip(
+                    selected=obligatory,
+                    onClick={obligatory=!obligatory},
+                    label={Text("Obbligata")}
+                )
+                if(tags.isNotEmpty()) {
+                    Text("Tag",style=MaterialTheme.typography.labelLarge)
+                    tags.chunked(2).forEach { rowTags ->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            rowTags.forEach { tag ->
+                                FilterChip(
+                                    selected=tag.id in selected,
+                                    onClick={selected=if(tag.id in selected) selected-tag.id else selected+tag.id},
+                                    label={Text(tag.name)},
+                                    modifier=Modifier.weight(1f)
+                                )
+                            }
+                            if(rowTags.size==1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+                error?.let {Text(it,color=MaterialTheme.colorScheme.error)}
+            }
+        },
+        confirmButton={TextButton({
+            try {
+                val d=LocalDate.parse(from)
+                val end=if(entry.type=="ferie") LocalDate.parse(to.ifBlank{from}) else d
+                val qty=quantity.replace(',','.').toDouble()
+                require(qty.isFinite() && qty>0 && end>=d)
+                onSave(entry.copy(dateFrom=d.toString(),dateTo=end.toString(),year=d.year,month=d.monthValue,quantity=qty,note=note.trim(),obligatory=obligatory),selected)
+            } catch(_:Exception) {error="Inserisci date valide e una quantità positiva"}
+        }) {Text("Salva")}},
+        dismissButton={TextButton(onDismiss) {Text("Annulla")}}
+    )
 }
 @Composable private fun CalendarContent(p:Profile,month:YearMonth,simulated:Boolean) {
     for(day in 1..month.lengthOfMonth()) {
