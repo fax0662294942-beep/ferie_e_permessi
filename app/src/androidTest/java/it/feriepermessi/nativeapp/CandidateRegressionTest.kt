@@ -46,7 +46,7 @@ class CandidateRegressionTest {
         var exits = 0
         compose.setContent { FeriePermessiApp(onExit={exits++},state=NativeState(profile=Profile(UserEntity("candidate")))) }
         compose.onNodeWithText("+ Ferie").performScrollTo().performClick()
-        compose.onNodeWithText("Data (AAAA-MM-GG)").performTextReplacement("invalid")
+        // Date fields now use a native picker; validate the editor through its numeric input.\n        compose.onNodeWithText("Giorni").performTextReplacement("-1")
         compose.onNodeWithText("Salva").performClick()
         compose.onNodeWithText("Inserisci date valide e una quantità positiva").assertExists()
         pressBack()
